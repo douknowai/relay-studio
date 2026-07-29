@@ -64,7 +64,10 @@ export function proxy(request: NextRequest) {
     [
       "default-src 'self'",
       // 保留 'unsafe-inline'：见文件头注释，需配合 nonce 方案才能移除
-      "script-src 'self' 'unsafe-inline'",
+      // 开发模式 Turbopack 使用 eval() 加载和热更新 JS chunks，需要 'unsafe-eval'
+      process.env.COZE_PROJECT_ENV !== 'PROD'
+        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+        : "script-src 'self' 'unsafe-inline'",
       // Tailwind 运行时注入内联 style，Next.js 也注入内联样式 -> 需要 'unsafe-inline'
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       `img-src ${imgSources.join(' ')}`,
