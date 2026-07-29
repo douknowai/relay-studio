@@ -1,27 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
-
-interface Profile {
-  id: string;
-  email: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  role: string;
-  created_at: string;
-}
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const { profile, session } = useAuth();
-  const [displayName, setDisplayName] = useState(profile?.display_name || '');
+  const originalName = profile?.display_name || '';
+  const [displayName, setDisplayName] = useState(originalName);
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const isDirty = useMemo(() => displayName.trim() !== originalName.trim(), [displayName, originalName]);
 
   const handleSave = async () => {
     setIsSaving(true);
-    setMessage(null);
     try {
       const res = await fetchWithTimeout('/api/v1/profile', {
         method: 'PATCH',
@@ -33,77 +26,164 @@ export default function SettingsPage() {
         timeout: 10_000,
       });
       if (res.ok) {
-        setMessage({ type: 'success', text: '保存成功' });
+        toast.success('设置已保存');
       } else {
         const data = await res.json();
-        setMessage({ type: 'error', text: data.error?.message || '保存失败' });
+        toast.error(data.error?.message || '保存失败');
       }
     } catch {
-      setMessage({ type: 'error', text: '请求失败' });
+      toast.error('请求失败');
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleCancel = () => {
+    setDisplayName(originalName);
+  };
+
   return (
-    <div className="p-4 md:p-6 max-w-2xl">
-      <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4 md:mb-6">个人设置</h1>
+    <div style={{ background: '#F5F5F5', minHeight: '100%', paddingBottom: isDirty ? '80px' : undefined }}>
+      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
+        {/* Page Title */}
+        <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 650, color: '#1A1A1A', marginBottom: '24px' }}>
+          个人设置
+        </h1>
 
-      <div className="space-y-5">
-        {/* Display Name */}
+        {/* Profile Section */}
         <div>
-          <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">显示名称</label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="输入显示名称"
-            className="w-full px-3 py-2 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-          />
-        </div>
+          <h2 style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: '#1A1A1A', marginBottom: '12px' }}>
+            账户信息
+          </h2>
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid rgba(26,26,26,0.08)',
+            borderRadius: '12px',
+            overflow: 'hidden',
+          }}>
+            {/* Display Name - editable */}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4" style={{ padding: '14px 20px', borderBottom: '1px solid rgba(26,26,26,0.06)' }}>
+              <div className="flex-1" style={{ minWidth: '0' }}>
+                <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>显示名称</div>
+                <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>用于工作台和任务列表的展示</div>
+              </div>
+              <div className="flex w-full justify-start md:w-[220px] md:justify-end md:shrink-0">
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="输入显示名称"
+                  style={{
+                    height: '36px',
+                    width: '220px',
+                    maxWidth: '100%',
+                    padding: '0 12px',
+                    border: '1px solid rgba(26,26,26,0.14)',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    color: '#1A1A1A',
+                    background: '#FFFFFF',
+                    outline: 'none',
+                    transition: 'border-color 160ms ease-out, box-shadow 160ms ease-out',
+                    boxSizing: 'border-box',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#006699'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,102,153,0.1)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(26,26,26,0.14)'; e.currentTarget.style.boxShadow = 'none'; }}
+                />
+              </div>
+            </div>
 
-        {/* Email (read-only) */}
-        <div>
-          <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">邮箱</label>
-          <input
-            type="email"
-            value={profile?.email || ''}
-            readOnly
-            className="w-full px-3 py-2 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text-muted)] cursor-not-allowed"
-          />
-        </div>
+            {/* Email - read-only */}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4" style={{ padding: '14px 20px', borderBottom: '1px solid rgba(26,26,26,0.06)' }}>
+              <div className="flex-1" style={{ minWidth: '0' }}>
+                <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>邮箱</div>
+                <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>登录账号，不可修改</div>
+              </div>
+              <div className="flex w-full justify-start md:w-[220px] md:justify-end md:shrink-0">
+                <div style={{ height: '36px', width: '220px', maxWidth: '100%', padding: '0 12px', border: '1px solid rgba(26,26,26,0.08)', borderRadius: '8px', fontSize: '13px', lineHeight: '36px', color: 'rgba(26,26,26,0.5)', background: '#FAFAFA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
+                  {profile?.email || ''}
+                </div>
+              </div>
+            </div>
 
-        {/* Role (read-only) */}
-        <div>
-          <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">角色</label>
-          <input
-            type="text"
-            value={profile?.role === 'admin' ? '管理员' : '用户'}
-            readOnly
-            className="w-full px-3 py-2 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text-muted)] cursor-not-allowed"
-          />
-        </div>
-
-        {message && (
-          <div className={`p-3 rounded-[var(--radius-md)] text-xs ${
-            message.type === 'success'
-              ? 'bg-[var(--color-success-subtle)] text-[var(--color-success)]'
-              : 'bg-[var(--color-destructive-subtle)] text-[var(--color-destructive)]'
-          }`}>
-            {message.text}
+            {/* Role - read-only */}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4" style={{ padding: '14px 20px' }}>
+              <div className="flex-1" style={{ minWidth: '0' }}>
+                <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>角色</div>
+                <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>当前账户权限等级</div>
+              </div>
+              <div className="flex w-full justify-start md:w-[220px] md:justify-end md:shrink-0">
+                <div style={{ height: '36px', width: '220px', maxWidth: '100%', padding: '0 12px', border: '1px solid rgba(26,26,26,0.08)', borderRadius: '8px', fontSize: '13px', lineHeight: '36px', color: 'rgba(26,26,26,0.5)', background: '#FAFAFA', boxSizing: 'border-box' }}>
+                  {profile?.role === 'admin' ? '管理员' : '用户'}
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-
-        <div className="flex justify-end">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-4 py-2 md:py-1.5 text-xs font-medium text-white bg-[var(--color-accent)] rounded-[var(--radius-sm)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-colors tap-target"
-          >
-            {isSaving ? '保存中...' : '保存'}
-          </button>
         </div>
       </div>
+
+      {/* Fixed Save Bar */}
+      {isDirty && (
+        <div
+          className="fixed bottom-0 left-0 right-0 md:left-[var(--sidebar-width)]"
+          style={{
+            background: '#FFFFFF',
+            borderTop: '1px solid rgba(26,26,26,0.08)',
+            padding: '12px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 30,
+            boxShadow: '0 -1px 8px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ marginLeft: 'auto', marginRight: 'auto', maxWidth: '960px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', width: '100%' }}>
+            <span style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)' }}>有未保存更改</span>
+            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={isSaving}
+                style={{
+                  height: '36px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(26,26,26,0.14)',
+                  background: '#FFFFFF',
+                  color: '#1A1A1A',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  opacity: isSaving ? 0.5 : 1,
+                }}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                style={{
+                  height: '36px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#1A1A1A',
+                  color: '#FFFFFF',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  opacity: isSaving ? 0.6 : 1,
+                }}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
+                {isSaving ? '保存中...' : '保存更改'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

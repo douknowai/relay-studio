@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
 import { PageSkeleton, ErrorState } from '@/components/loading-states';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
 interface SystemSettings {
   [key: string]: { value: string; description: string | null };
@@ -61,30 +63,58 @@ const SETTING_DEFAULTS: Record<string, string> = {
   maintenance_message: '',
 };
 
-function Toggle({
+const DANGER_RED = '#B42318';
+const ACCENT_COLOR = '#006699';
+
+/* ── Standard Switch (44×24 track, 18px thumb) ───────────────────── */
+function SettingSwitch({
   checked,
   onChange,
   disabled,
+  label,
 }: {
   checked: boolean;
-  onChange: () => void;
+  onChange: (next: boolean) => void;
   disabled?: boolean;
+  label: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={onChange}
+      aria-label={label}
       disabled={disabled}
-      className={`relative inline-flex h-6 w-11 md:h-5 md:w-9 shrink-0 cursor-pointer rounded-full border-transparent transition-colors duration-150 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed tap-target ${
-        checked ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
-      }`}
+      onClick={() => onChange(!checked)}
+      style={{
+        width: '44px',
+        height: '24px',
+        borderRadius: '9999px',
+        border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'background 160ms ease-out',
+        background: checked ? ACCENT_COLOR : 'rgba(26,26,26,0.16)',
+        flexShrink: 0,
+        position: 'relative',
+        padding: 0,
+      }}
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+      onFocus={(e) => { e.currentTarget.style.boxShadow = `0 0 0 3px ${ACCENT_COLOR}33`; }}
+      onBlur={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
     >
       <span
-        className={`pointer-events-none inline-block h-5 w-5 md:h-4 md:w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-150 ease-in-out ${
-          checked ? 'translate-x-[22px] md:translate-x-[18px]' : 'translate-x-[2px]'
-        } mt-[2px] md:mt-[1px]`}
+        style={{
+          width: '18px',
+          height: '18px',
+          borderRadius: '9999px',
+          background: '#FFFFFF',
+          display: 'block',
+          transform: checked ? 'translateX(23px)' : 'translateX(3px)',
+          transition: 'transform 160ms ease-out',
+          marginTop: '3px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }}
       />
     </button>
   );
@@ -96,8 +126,9 @@ export default function AdminSettingsPage() {
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showDangerDialog, setShowDangerDialog] = useState(false);
+  const [dangerActionPending, setDangerActionPending] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     setIsLoading(true);
@@ -118,7 +149,6 @@ export default function AdminSettingsPage() {
             edits[s.key] = s.value ?? '';
           }
         }
-        // Fill in defaults for settings not in DB
         for (const key of Object.keys(SETTING_LABELS)) {
           if (!(key in mapped)) {
             mapped[key] = { value: SETTING_DEFAULTS[key] ?? '', description: SETTING_DESCRIPTIONS[key] ?? null };
@@ -142,127 +172,213 @@ export default function AdminSettingsPage() {
     fetchSettings();
   }, [isAdmin, fetchSettings]);
 
-  // Auto-dismiss save message
-  useEffect(() => {
-    if (!saveMessage) return;
-    const timer = setTimeout(() => setSaveMessage(null), 3000);
-    return () => clearTimeout(timer);
-  }, [saveMessage]);
+  const isBoolean = (value: string) => value === 'true' || value === 'false';
 
-  const handleSave = async (key: string, value: string) => {
-    setSaveMessage(null);
-    setSavingKey(key);
+  /* ── Global dirty state ───────────────────────────────────────── */
+  const changedKeys = useMemo(() => {
+    return Object.keys(editValues).filter((key) => {
+      const original = settings[key]?.value ?? SETTING_DEFAULTS[key] ?? '';
+      return editValues[key] !== original;
+    });
+  }, [editValues, settings]);
+  const isDirty = changedKeys.length > 0;
+
+  const handleInputChange = (key: string, newValue: string) => {
+    setEditValues((prev) => ({ ...prev, [key]: newValue }));
+  };
+
+  const handleCancel = () => {
+    const reset: Record<string, string> = {};
+    for (const key of Object.keys(SETTING_LABELS)) {
+      reset[key] = settings[key]?.value ?? SETTING_DEFAULTS[key] ?? '';
+    }
+    setEditValues(reset);
+  };
+
+  const handleSaveAll = async () => {
+    if (changedKeys.length === 0 || isSaving) return;
+    setIsSaving(true);
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    for (const key of changedKeys) {
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-session': session?.access_token || '',
+          },
+          body: JSON.stringify({ key, value: editValues[key] }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          errors.push(`${SETTING_LABELS[key]}: ${json.error?.message || '保存失败'}`);
+          failedCount++;
+        }
+      } catch {
+        errors.push(`${SETTING_LABELS[key]}: 网络错误`);
+        failedCount++;
+      }
+    }
+
+    if (failedCount === 0) {
+      toast.success('设置已保存');
+      await fetchSettings();
+    } else {
+      const msg = failedCount === changedKeys.length
+        ? `保存失败：${errors[0]}`
+        : `部分保存失败（${failedCount}/${changedKeys.length}）`;
+      toast.error(msg, { description: errors.length > 1 ? errors.slice(1).join('\n') : undefined });
+      await fetchSettings();
+    }
+    setIsSaving(false);
+  };
+
+  /* ── Danger Zone: Emergency Stop ──────────────────────────────── */
+  const isGenerating = settings.generation_enabled?.value === 'true';
+  const handleDangerConfirm = async () => {
+    setDangerActionPending(true);
     try {
+      const newValue = isGenerating ? 'false' : 'true';
       const res = await fetch('/api/admin/settings', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'x-session': session?.access_token || '',
         },
-        body: JSON.stringify({ key, value }),
+        body: JSON.stringify({ key: 'generation_enabled', value: newValue }),
       });
       if (res.ok) {
-        setSaveMessage({ type: 'success', text: `${SETTING_LABELS[key] || key} 已保存` });
+        toast.success(isGenerating ? '生成服务已停止' : '生成服务已恢复');
         await fetchSettings();
       } else {
         const json = await res.json().catch(() => ({}));
-        setSaveMessage({ type: 'error', text: json.error?.message || '保存失败' });
+        toast.error(json.error?.message || '操作失败');
       }
     } catch {
-      setSaveMessage({ type: 'error', text: '网络错误，保存失败' });
+      toast.error('网络错误，操作失败');
     } finally {
-      setSavingKey(null);
+      setDangerActionPending(false);
+      setShowDangerDialog(false);
     }
-  };
-
-  const handleInputChange = (key: string, newValue: string) => {
-    setEditValues((prev) => ({ ...prev, [key]: newValue }));
   };
 
   if (!isAdmin) return null;
 
-  const isBoolean = (value: string) => value === 'true' || value === 'false';
+  if (isLoading) {
+    return (
+      <div style={{ background: '#F5F5F5', minHeight: '100%' }}>
+        <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
+          <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 650, color: '#1A1A1A', marginBottom: '24px' }}>系统设置</h1>
+          <PageSkeleton />
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ background: '#F5F5F5', minHeight: '100%' }}>
+        <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
+          <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 650, color: '#1A1A1A', marginBottom: '24px' }}>系统设置</h1>
+          <ErrorState message={loadError} onRetry={fetchSettings} />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl">
-      <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4 md:mb-6">系统设置</h1>
+    <div style={{ background: '#F5F5F5', minHeight: '100%', paddingBottom: isDirty ? '80px' : undefined }}>
+      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
+        {/* Page Title */}
+        <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 650, color: '#1A1A1A', marginBottom: '24px' }}>
+          系统设置
+        </h1>
 
-      {saveMessage && (
-        <div className={`mb-4 p-2.5 text-xs rounded-[var(--radius-sm)] ${
-          saveMessage.type === 'success'
-            ? 'text-[var(--color-success)] bg-[var(--color-success-subtle)]'
-            : 'text-[var(--color-destructive)] bg-[var(--color-destructive-subtle)]'
-        }`}>
-          {saveMessage.text}
-        </div>
-      )}
-
-      {isLoading ? (
-        <PageSkeleton />
-      ) : loadError ? (
-        <ErrorState message={loadError} onRetry={fetchSettings} />
-      ) : (
-        <div className="space-y-6">
+        {/* Setting Groups */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           {SETTING_GROUPS.map((group) => {
             const groupSettings = group.keys
               .filter((key) => key in settings)
               .map((key) => ({ key, ...settings[key] }));
-
             if (groupSettings.length === 0) return null;
 
             return (
               <div key={group.title}>
-                <h2 className="text-sm font-medium text-[var(--color-text)] mb-3">{group.title}</h2>
-                <div className="space-y-2">
-                  {groupSettings.map((setting) => {
+                {/* Section Title */}
+                <h2 style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: '#1A1A1A', marginBottom: '12px' }}>
+                  {group.title}
+                </h2>
+                {/* White Container */}
+                <div style={{
+                  background: '#FFFFFF',
+                  border: '1px solid rgba(26,26,26,0.08)',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                }}>
+                  {groupSettings.map((setting, idx) => {
                     const bool = isBoolean(setting.value);
-                    const isOn = setting.value === 'true';
                     const editValue = editValues[setting.key] ?? setting.value;
-                    const hasChanged = editValue !== setting.value;
-                    const isSaving = savingKey === setting.key;
+                    const isLast = idx === groupSettings.length - 1;
 
                     return (
-                      <div key={setting.key} className="flex items-center justify-between p-3 border border-[var(--color-border)] rounded-[var(--radius-md)]">
-                        <div className="min-w-0 flex-1 mr-4">
-                          <div className="text-sm text-[var(--color-text)]">
+                      <div
+                        key={setting.key}
+                        className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4"
+                        style={{
+                          padding: '14px 20px',
+                          borderBottom: isLast ? 'none' : '1px solid rgba(26,26,26,0.06)',
+                        }}
+                      >
+                        {/* Left: Title + Description */}
+                        <div className="flex-1" style={{ minWidth: '0' }}>
+                          <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>
                             {SETTING_LABELS[setting.key] || setting.key}
                           </div>
-                          <div className="text-xs text-[var(--color-text-subtle)] mt-0.5 mobile-break-all">
+                          <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>
                             {SETTING_DESCRIPTIONS[setting.key] || setting.description}
                           </div>
                         </div>
-                        {bool ? (
-                          <Toggle
-                            checked={isOn}
-                            onChange={() => handleSave(setting.key, isOn ? 'false' : 'true')}
-                            disabled={isSaving}
-                          />
-                        ) : (
-                          <div className="flex items-center gap-2 shrink-0">
+
+                        {/* Right: Control */}
+                        <div className="flex w-full justify-start md:w-[220px] md:justify-end md:shrink-0">
+                          {bool ? (
+                            <SettingSwitch
+                              checked={editValue === 'true'}
+                              onChange={(next) => handleInputChange(setting.key, next ? 'true' : 'false')}
+                              disabled={isSaving}
+                              label={SETTING_LABELS[setting.key]}
+                            />
+                          ) : (
                             <input
-                              type="text"
+                              type={setting.key === 'maintenance_message' ? 'text' : 'number'}
                               value={editValue}
                               onChange={(e) => handleInputChange(setting.key, e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && hasChanged) {
-                                  handleSave(setting.key, editValue);
-                                }
+                              style={{
+                                height: '36px',
+                                width: setting.key === 'maintenance_message' ? '220px' : '160px',
+                                padding: '0 12px',
+                                border: '1px solid rgba(26,26,26,0.14)',
+                                borderRadius: '8px',
+                                fontSize: '13px',
+                                color: '#1A1A1A',
+                                background: '#FFFFFF',
+                                outline: 'none',
+                                transition: 'border-color 160ms ease-out, box-shadow 160ms ease-out',
+                                boxSizing: 'border-box',
                               }}
-                              className="px-2 py-1.5 md:py-1 text-xs bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-sm)] w-28 sm:w-36"
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = ACCENT_COLOR;
+                                e.currentTarget.style.boxShadow = `0 0 0 3px ${ACCENT_COLOR}1a`;
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = 'rgba(26,26,26,0.14)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
                             />
-                            <button
-                              onClick={() => handleSave(setting.key, editValue)}
-                              disabled={!hasChanged || isSaving}
-                              className={`px-2.5 py-1.5 md:py-1 text-xs font-medium rounded-[var(--radius-sm)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                                hasChanged
-                                  ? 'bg-[var(--color-accent)] text-white hover:opacity-90'
-                                  : 'bg-[var(--color-surface-subtle)] text-[var(--color-text-muted)]'
-                              }`}
-                            >
-                              {isSaving ? '...' : '保存'}
-                            </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -271,26 +387,180 @@ export default function AdminSettingsPage() {
             );
           })}
         </div>
+
+        {/* Danger Zone */}
+        <div style={{ marginTop: '32px' }}>
+          <h2 style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: '#1A1A1A', marginBottom: '12px' }}>
+            危险操作
+          </h2>
+          <div style={{
+            background: '#FFFFFF',
+            border: `1px solid ${DANGER_RED}33`,
+            borderRadius: '12px',
+            padding: '20px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: DANGER_RED, marginBottom: '4px' }}>
+                  紧急停止
+                </div>
+                <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)' }}>
+                  点击后将立即停止所有生成任务和 API 服务。已运行任务将继续执行，但不再接受新请求。用户端将显示维护说明。
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={dangerActionPending}
+                onClick={() => setShowDangerDialog(true)}
+                style={{
+                  height: '36px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: `1px solid ${DANGER_RED}`,
+                  background: isGenerating ? DANGER_RED : '#FFFFFF',
+                  color: isGenerating ? '#FFFFFF' : DANGER_RED,
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: dangerActionPending ? 'not-allowed' : 'pointer',
+                  opacity: dangerActionPending ? 0.6 : 1,
+                  transition: 'opacity 160ms ease-out',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                onFocus={(e) => { e.currentTarget.style.boxShadow = `0 0 0 3px ${DANGER_RED}1a`; }}
+                onBlur={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                {dangerActionPending ? '处理中...' : isGenerating ? '紧急停止生成服务' : '恢复生成服务'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fixed Save Bar */}
+      {isDirty && (
+        <div
+          className="fixed bottom-0 left-0 right-0 md:left-[var(--sidebar-width)]"
+          style={{
+            background: '#FFFFFF',
+            borderTop: '1px solid rgba(26,26,26,0.08)',
+            padding: '12px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            zIndex: 30,
+            boxShadow: '0 -1px 8px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ marginLeft: 'auto', marginRight: 'auto', maxWidth: '960px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', width: '100%' }}>
+            <span style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)' }}>
+              有未保存更改{changedKeys.length > 1 ? `（${changedKeys.length} 项）` : ''}
+            </span>
+            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={isSaving}
+                style={{
+                  height: '36px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(26,26,26,0.14)',
+                  background: '#FFFFFF',
+                  color: '#1A1A1A',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  opacity: isSaving ? 0.5 : 1,
+                  transition: 'background 160ms ease-out',
+                }}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.background = '#F5F5F5'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={isSaving}
+                style={{
+                  height: '36px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#1A1A1A',
+                  color: '#FFFFFF',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  opacity: isSaving ? 0.6 : 1,
+                  transition: 'opacity 160ms ease-out',
+                }}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
+                {isSaving ? '保存中...' : '保存更改'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Emergency Stop */}
-      <div className="mt-6 md:mt-8 p-4 border border-[var(--color-destructive)]/30 rounded-[var(--radius-md)]">
-        <h2 className="text-sm font-medium text-[var(--color-destructive)] mb-2">紧急停止</h2>
-        <p className="text-xs text-[var(--color-text-muted)] mb-3">
-          关闭后不再接受新任务。已运行任务将继续执行。用户端将显示维护说明。
-        </p>
-        <button
-          onClick={() => handleSave('generation_enabled', settings.generation_enabled?.value === 'true' ? 'false' : 'true')}
-          disabled={savingKey === 'generation_enabled'}
-          className={`px-3 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-md)] transition-colors disabled:opacity-50 tap-target ${
-            settings.generation_enabled?.value === 'true'
-              ? 'bg-[var(--color-destructive)] text-white hover:opacity-90'
-              : 'bg-[var(--color-success)] text-white hover:opacity-90'
-          }`}
-        >
-          {savingKey === 'generation_enabled' ? '...' : settings.generation_enabled?.value === 'true' ? '紧急停止生成服务' : '恢复生成服务'}
-        </button>
-      </div>
+      {/* Danger Zone Confirmation Dialog */}
+      <Dialog open={showDangerDialog} onOpenChange={setShowDangerDialog}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: '16px', fontWeight: 600, color: DANGER_RED }}>
+              确认{isGenerating ? '停止' : '恢复'}生成服务
+            </DialogTitle>
+            <DialogDescription style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)' }}>
+              {isGenerating
+                ? '此操作将立即停止所有生成任务和 API 服务。已运行任务将继续执行，但不再接受新请求。用户端将显示维护说明。'
+                : '此操作将恢复生成和 API 服务，用户可以重新提交任务。'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter style={{ gap: '8px' }}>
+            <DialogClose asChild>
+              <button
+                type="button"
+                style={{
+                  height: '36px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(26,26,26,0.14)',
+                  background: '#FFFFFF',
+                  color: '#1A1A1A',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+            </DialogClose>
+            <button
+              type="button"
+              onClick={handleDangerConfirm}
+              disabled={dangerActionPending}
+              style={{
+                height: '36px',
+                padding: '0 16px',
+                borderRadius: '8px',
+                border: 'none',
+                background: DANGER_RED,
+                color: '#FFFFFF',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: dangerActionPending ? 'not-allowed' : 'pointer',
+                opacity: dangerActionPending ? 0.6 : 1,
+              }}
+            >
+              {dangerActionPending ? '处理中...' : `确认${isGenerating ? '停止' : '恢复'}`}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -70,9 +70,9 @@ function SidebarContent({
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                'flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-[var(--radius-sm)] transition-colors duration-150 md:py-1.5',
+                'flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-[var(--radius-sm)] transition-colors duration-150 md:py-1.5 relative',
                 pathname === item.href || pathname?.startsWith(item.href + '/')
-                  ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium'
+                  ? 'bg-[#EBF5FA] text-[#006699] font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[2px] before:bg-[#006699] before:rounded-full'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
               )}
             >
@@ -97,9 +97,9 @@ function SidebarContent({
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    'flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-[var(--radius-sm)] transition-colors duration-150 md:py-1.5',
+                    'flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-[var(--radius-sm)] transition-colors duration-150 md:py-1.5 relative',
                     pathname === item.href || (item.href !== '/admin' && pathname?.startsWith(item.href))
-                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium'
+                      ? 'bg-[#EBF5FA] text-[#006699] font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[2px] before:bg-[#006699] before:rounded-full'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
                   )}
                 >
