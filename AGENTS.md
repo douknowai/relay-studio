@@ -1,8 +1,8 @@
-# Image Relay Studio - AI 图像生成工作台
+# Relay Studio - AI 媒体生成工作台
 
 ## 项目概览
 
-内部 AI 图像生成平台，面向白名单用户使用。通过扣子官方 SDK 调用图像生成能力，统一封装为 Web 工作台和内部 API。
+内部 AI 媒体生成平台，面向白名单用户使用。通过扣子官方 SDK 调用图像与视频生成能力，统一封装为 Web 工作台和内部 API。
 
 ## 版本技术栈
 
@@ -15,6 +15,7 @@
 - **Auth**: Supabase Auth (邮箱登录, x-session header)
 - **Storage**: S3 Compatible Object Storage (coze-coding-dev-sdk)
 - **Image Generation**: coze-coding-dev-sdk ImageGenerationClient
+- **Video Generation**: coze-coding-dev-sdk VideoGenerationClient (Seedance)
 - **Validation**: Zod 4
 - **Package Manager**: pnpm (禁止 npm/yarn)
 
@@ -28,6 +29,7 @@ src/
 │   │   ├── studio/            # 生图工作台
 │   │   ├── tasks/             # 任务列表
 │   │   ├── gallery/           # 图片库
+│   │   ├── videos/            # 视频库
 │   │   ├── gallery/[id]/      # 图片详情
 │   │   ├── api-keys/          # API Key 管理
 │   │   ├── usage/             # 使用量
@@ -50,6 +52,7 @@ src/
 │       ├── upload/            # 上传接口
 │       ├── v1/                # 统一 API v1
 │       │   ├── images/        # 图片接口 (含 generations)
+│       │   ├── videos/        # 视频接口 (含 generations)
 │       │   ├── tasks/         # 任务接口
 │       │   ├── models/        # 模型接口
 │       │   ├── usage/         # 使用量接口
@@ -68,11 +71,15 @@ src/
 │   ├── api-helpers.ts         # API 辅助函数
 │   ├── logging/               # 结构化日志
 │   ├── rate-limit.ts          # 内存限流器
-│   ├── providers/images/      # Provider 适配层
+│   ├── providers/images/      # 图片 Provider 适配层
 │   │   ├── types.ts           # Provider 接口定义
 │   │   ├── coze-coding-provider.ts  # Coze SDK Provider
 │   │   ├── mock-provider.ts   # Mock Provider
 │   │   └── index.ts           # Provider Router
+│   ├── providers/videos/      # 视频 Provider 适配层
+│   │   ├── types.ts           # 视频 Provider 接口定义
+│   │   ├── coze-coding-provider.ts  # Coze SDK Video Provider (Seedance)
+│   │   └── index.ts           # Video Provider Router
 │   ├── tasks/                 # 任务系统
 │   │   ├── state-machine.ts   # 任务状态机
 │   │   └── executor.ts        # 任务执行器
@@ -145,6 +152,9 @@ src/
 |------|------|------|
 | `/api/v1/models` | GET | 列出可用模型（API Key 认证返回 OpenAI 格式） |
 | `/api/v1/images/generations` | POST | 同步生成图片，兼容 OpenAI Images API |
+| `/api/v1/videos` | POST | 异步生成视频（文生/图生/首尾帧），返回 task_id |
+| `/api/v1/videos` | GET | 列出当前用户视频资产 |
+| `/api/v1/videos/[video_id]` | GET | 获取视频详情（含签名 URL） |
 
 ### 请求格式（/api/v1/images/generations）
 

@@ -1,7 +1,8 @@
 export type UserRole = 'admin' | 'user';
 export type UserStatus = 'active' | 'disabled' | 'pending';
 
-export type TaskType = 'text_to_image' | 'image_to_image';
+export type TaskType = 'text_to_image' | 'image_to_image' | 'text_to_video' | 'image_to_video' | 'first_last_frame';
+export type MediaType = 'image' | 'video';
 export type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type RequestSource = 'web' | 'api' | 'admin_retry';
 
@@ -117,6 +118,7 @@ export interface GenerationAsset {
   ai_generated: boolean;
   visible_watermark_disabled: boolean;
   favorite: boolean;
+  media_type: MediaType;
   url?: string;
   thumbnail_url?: string;
   deleted_at: string | null;

@@ -5,25 +5,25 @@ import { parseInput, updateImageSchema } from '@/server/validation/schemas';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ image_id: string }> }
+  { params }: { params: Promise<{ video_id: string }> }
 ) {
   try {
-    const { image_id } = await params;
+    const { video_id } = await params;
     const auth = await authenticateRequest(request);
-    requireScope(auth, 'images:read');
+    requireScope(auth, 'videos:read');
     const { getSupabaseServerClient } = await import('@/storage/database/supabase-client');
     const supabase = getSupabaseServerClient();
 
     const { data, error } = await supabase
       .from('generation_assets')
       .select('*')
-      .eq('id', image_id)
-      .eq('media_type', 'image')
+      .eq('id', video_id)
+      .eq('media_type', 'video')
       .single();
 
-    if (error || !data) throw new AppError(ErrorCodes.TASK_NOT_FOUND, '图片不存在');
+    if (error || !data) throw new AppError(ErrorCodes.TASK_NOT_FOUND, '视频不存在');
     if (auth.role !== 'admin' && data.user_id !== auth.userId) {
-      throw new AppError(ErrorCodes.FORBIDDEN, '无权访问此图片');
+      throw new AppError(ErrorCodes.FORBIDDEN, '无权访问此视频');
     }
 
     // Generate signed URL
@@ -46,12 +46,12 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ image_id: string }> }
+  { params }: { params: Promise<{ video_id: string }> }
 ) {
   try {
-    const { image_id } = await params;
+    const { video_id } = await params;
     const auth = await authenticateRequest(request);
-    requireScope(auth, 'images:write');
+    requireScope(auth, 'videos:write');
     const { favorite } = parseInput(updateImageSchema, await request.json());
 
     const { getSupabaseServerClient } = await import('@/storage/database/supabase-client');
@@ -61,12 +61,13 @@ export async function PATCH(
     const { data: existing } = await supabase
       .from('generation_assets')
       .select('user_id')
-      .eq('id', image_id)
+      .eq('id', video_id)
+      .eq('media_type', 'video')
       .single();
 
-    if (!existing) throw new AppError(ErrorCodes.TASK_NOT_FOUND, '图片不存在');
+    if (!existing) throw new AppError(ErrorCodes.TASK_NOT_FOUND, '视频不存在');
     if (auth.role !== 'admin' && existing.user_id !== auth.userId) {
-      throw new AppError(ErrorCodes.FORBIDDEN, '无权操作此图片');
+      throw new AppError(ErrorCodes.FORBIDDEN, '无权操作此视频');
     }
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -75,7 +76,7 @@ export async function PATCH(
     const { data, error } = await supabase
       .from('generation_assets')
       .update(updates)
-      .eq('id', image_id)
+      .eq('id', video_id)
       .select()
       .single();
 
@@ -89,12 +90,12 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ image_id: string }> }
+  { params }: { params: Promise<{ video_id: string }> }
 ) {
   try {
-    const { image_id } = await params;
+    const { video_id } = await params;
     const auth = await authenticateRequest(request);
-    requireScope(auth, 'images:write');
+    requireScope(auth, 'videos:write');
 
     const { getSupabaseServerClient } = await import('@/storage/database/supabase-client');
     const supabase = getSupabaseServerClient();
@@ -102,19 +103,20 @@ export async function DELETE(
     const { data: existing } = await supabase
       .from('generation_assets')
       .select('user_id')
-      .eq('id', image_id)
+      .eq('id', video_id)
+      .eq('media_type', 'video')
       .single();
 
-    if (!existing) throw new AppError(ErrorCodes.TASK_NOT_FOUND, '图片不存在');
+    if (!existing) throw new AppError(ErrorCodes.TASK_NOT_FOUND, '视频不存在');
     if (auth.role !== 'admin' && existing.user_id !== auth.userId) {
-      throw new AppError(ErrorCodes.FORBIDDEN, '无权删除此图片');
+      throw new AppError(ErrorCodes.FORBIDDEN, '无权删除此视频');
     }
 
     // Soft delete
     const { error } = await supabase
       .from('generation_assets')
       .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', image_id);
+      .eq('id', video_id);
 
     if (error) throw new AppError(ErrorCodes.INTERNAL_ERROR, '删除失败');
 

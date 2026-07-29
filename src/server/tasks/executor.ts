@@ -6,8 +6,9 @@ import {
   isRetryableProviderError,
 } from '@/server/errors';
 import { logger } from '@/server/logging';
-import { canTransition, type TaskStatus, type TaskType } from './state-machine';
+import { canTransition, isVideoTaskType, type TaskStatus, type TaskType } from './state-machine';
 import { generateWithModel, getModelConfig } from '@/server/providers/images';
+import { generateVideo } from '@/server/providers/videos';
 import {
   uploadFile,
   deleteFile,
@@ -17,6 +18,7 @@ import {
   MAX_DOWNLOAD_BYTES,
 } from '@/server/storage';
 import type { ProviderGenerationRequest } from '@/server/providers/images/types';
+import type { VideoProviderRequest, VideoResolution, VideoRatio } from '@/server/providers/videos/types';
 
 /**
  * Narrows an unknown caught value to a PostgREST/Postgres-style error
@@ -291,6 +293,12 @@ export async function executeTask(taskId: string, customHeaders?: Record<string,
       }
     }
 
+    // ---- Video task branch ----
+    if (isVideoTaskType(task.task_type)) {
+      await executeVideoTask(task, modelConfig, modelCode, referenceUrls, customHeaders, startTime, client);
+      return;
+    }
+
     const requestedCount = Number(task.request_parameters?.n ?? 1);
     if (requestedCount > 1 && !modelConfig.supports_sequential_generation) {
       throw new AppError(
@@ -446,6 +454,130 @@ export async function executeTask(taskId: string, customHeaders?: Record<string,
     const errorCode: ErrorCode = error instanceof AppError ? error.code : ErrorCodes.PROVIDER_ERROR;
     const errorMsg = error instanceof Error ? error.message : 'Unknown provider error';
     await markTaskFailed(taskId, errorCode, errorMsg, latencyMs);
+  }
+}
+
+/**
+ * Execute a video generation task using the Coze VideoGenerationClient.
+ * Downloads the generated video, persists to object storage, and creates
+ * a generation_assets record with media_type='video'.
+ */
+async function executeVideoTask(
+  task: GenerationTask,
+  modelConfig: Awaited<ReturnType<typeof getModelConfig>>,
+  modelCode: string,
+  referenceUrls: string[],
+  customHeaders: Record<string, string> | undefined,
+  startTime: number,
+  client: ReturnType<typeof getSupabaseClient>
+): Promise<void> {
+  try {
+    const params = task.request_parameters || {};
+    const resolution = (params.resolution as VideoResolution) || '720p';
+    const ratio = (params.ratio as VideoRatio) || '16:9';
+    const duration = (params.duration as number) || 5;
+    const watermark = params.watermark as boolean ?? true;
+    const generateAudio = params.generate_audio as boolean ?? true;
+    const camerafixed = params.camerafixed as boolean ?? false;
+
+    // Determine image roles for image-to-video
+    const roles: ('first_frame' | 'last_frame' | 'reference_image')[] = [];
+    if (params.reference_roles) {
+      const paramRoles = params.reference_roles as string[];
+      for (const r of paramRoles) {
+        if (r === 'first_frame' || r === 'last_frame' || r === 'reference_image') {
+          roles.push(r);
+        }
+      }
+    }
+
+    const providerRequest: VideoProviderRequest = {
+      prompt: task.prompt,
+      model_id: (modelConfig.external_model_id as string) || '',
+      resolution,
+      ratio,
+      duration,
+      watermark,
+      camerafixed,
+      generate_audio: generateAudio,
+      reference_image_urls: referenceUrls.length > 0 ? referenceUrls : undefined,
+      reference_image_roles: roles.length > 0 ? roles : undefined,
+      custom_headers: customHeaders,
+      max_wait_time: modelConfig.timeout_seconds,
+    };
+
+    const result = await generateVideo(providerRequest);
+    const latencyMs = Date.now() - startTime;
+
+    if (result.success && result.video_url) {
+      // Download video and persist to object storage
+      const { buffer, contentType } = await fetchToBuffer(result.video_url);
+      const ext = contentType.includes('mp4') ? 'mp4' : 'webm';
+      const targetKey = `users/${task.user_id}/generated/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${task.id}.${ext}`;
+      const objectKey = await uploadFile(buffer, targetKey, contentType);
+
+      // Create video asset record
+      const { error: assetInsertError } = await client.from('generation_assets').insert({
+        task_id: task.id,
+        user_id: task.user_id,
+        object_key: objectKey,
+        mime_type: contentType,
+        media_type: 'video',
+        duration_seconds: result.duration_seconds || duration,
+        ai_generated: true,
+        visible_watermark_disabled: !watermark,
+        favorite: false,
+        provider_metadata: {
+          resolution: result.resolution,
+          ratio: result.ratio,
+          model: result.model,
+          last_frame_url: result.last_frame_url,
+        },
+      });
+
+      if (assetInsertError) {
+        await deleteFile(objectKey).catch(() => false);
+        throw assetInsertError;
+      }
+
+      // Mark task as succeeded
+      const { data: succeeded } = await client
+        .from('generation_tasks')
+        .update({
+          status: 'succeeded',
+          completed_at: new Date().toISOString(),
+          latency_ms: latencyMs,
+          provider_request_id: result.usage ? `vid_${Date.now()}` : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', task.id)
+        .eq('status', 'running')
+        .select();
+
+      if (succeeded && succeeded.length > 0) {
+        await client
+          .from('usage_records')
+          .update({
+            generated_image_count: 1,
+            status: 'succeeded',
+            latency_ms: latencyMs,
+          })
+          .eq('task_id', task.id);
+
+        logger.info('Video task completed successfully', {
+          task_id: task.id,
+          latency_ms: latencyMs,
+          action: 'video_task_succeeded',
+        });
+      }
+    } else {
+      await markTaskFailed(task.id, ErrorCodes.PROVIDER_ERROR, result.error_message, latencyMs);
+    }
+  } catch (error) {
+    const latencyMs = Date.now() - startTime;
+    const errorCode: ErrorCode = error instanceof AppError ? error.code : ErrorCodes.PROVIDER_ERROR;
+    const errorMsg = error instanceof Error ? error.message : 'Unknown video provider error';
+    await markTaskFailed(task.id, errorCode, errorMsg, latencyMs);
   }
 }
 
@@ -682,7 +814,7 @@ export async function executeTaskSync(
     reference_image_urls?: string[];
   } = {}
 ): Promise<GenerationTask & { generated_urls?: string[] }> {
-  const timeoutMs = options.timeoutMs || 120_000;
+  const timeoutMs = options.timeoutMs || 300_000;
   const pollIntervalMs = options.pollIntervalMs || 2000;
   const deadline = Date.now() + timeoutMs;
 

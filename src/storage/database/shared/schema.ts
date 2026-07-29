@@ -197,6 +197,8 @@ export const generationAssets = pgTable(
     provider_metadata: jsonb("provider_metadata"),
     ai_generated: boolean("ai_generated").notNull().default(true),
     visible_watermark_disabled: boolean("visible_watermark_disabled").notNull().default(false),
+    media_type: varchar("media_type", { length: 20 }).notNull().default("image"),
+    duration_seconds: integer("duration_seconds"),
     favorite: boolean("favorite").notNull().default(false),
     deleted_at: timestamp("deleted_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -205,6 +207,7 @@ export const generationAssets = pgTable(
   (table) => [
     index("generation_assets_task_id_idx").on(table.task_id),
     index("generation_assets_user_id_idx").on(table.user_id),
+    index("generation_assets_media_type_idx").on(table.media_type),
     index("generation_assets_favorite_idx").on(table.user_id, table.favorite),
     index("generation_assets_deleted_at_idx").on(table.deleted_at),
     index("generation_assets_created_at_idx").on(table.created_at),

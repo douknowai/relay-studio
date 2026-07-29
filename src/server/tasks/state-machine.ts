@@ -1,5 +1,10 @@
 export type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-export type TaskType = 'text_to_image' | 'image_to_image';
+export type TaskType = 'text_to_image' | 'image_to_image' | 'text_to_video' | 'image_to_video' | 'first_last_frame';
+
+/** Check if a task type is a video task. */
+export function isVideoTaskType(type: string): boolean {
+  return type === 'text_to_video' || type === 'image_to_video' || type === 'first_last_frame';
+}
 
 const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   queued: ['running', 'cancelled'],

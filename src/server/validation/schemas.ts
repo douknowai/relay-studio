@@ -58,6 +58,24 @@ export const imageListQuerySchema = z.object({
   task_id: z.string().uuid().optional(),
 });
 
+export const createVideoTaskSchema = z.object({
+  model: z.string().min(1, 'Model code is required'),
+  prompt: z.string().min(1, 'Prompt is required').max(4000, 'Prompt too long'),
+  resolution: z.enum(['480p', '720p', '1080p']).optional().default('720p'),
+  ratio: z.enum(['16:9', '9:16', '1:1', '4:3', '21:9']).optional().default('16:9'),
+  duration: z.number().int().min(5).max(10).optional().default(5),
+  reference_asset_ids: z.array(z.string().uuid()).max(2).optional().default([]),
+  idempotency_key: z.string().max(128).optional(),
+  task_type: z.enum(['text_to_video', 'image_to_video', 'first_last_frame']).optional().default('text_to_video'),
+});
+
+export const videoListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(100).default(24),
+  favorite: z.enum(['true', 'false']).optional(),
+  task_id: z.string().uuid().optional(),
+});
+
 export const updateImageSchema = z.object({
   favorite: z.boolean(),
 }).strict();
@@ -65,6 +83,8 @@ export const updateImageSchema = z.object({
 export const API_KEY_SCOPES = [
   'images:read',
   'images:write',
+  'videos:read',
+  'videos:write',
   'tasks:read',
   'tasks:write',
   'models:read',
@@ -166,3 +186,5 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateUserQuotaInput = z.infer<typeof updateUserQuotaSchema>;
 export type UpdateModelConfigInput = z.infer<typeof updateModelConfigSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+export type CreateVideoTaskInput = z.infer<typeof createVideoTaskSchema>;
+export type VideoListQueryInput = z.infer<typeof videoListQuerySchema>;

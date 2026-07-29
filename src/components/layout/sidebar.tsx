@@ -9,6 +9,7 @@ import {
   PenLine,
   ListTodo,
   Image,
+  Video,
   Key,
   BarChart3,
   Settings,
@@ -26,6 +27,7 @@ const userNavItems = [
   { href: '/studio', label: '工作台', icon: PenLine },
   { href: '/tasks', label: '任务', icon: ListTodo },
   { href: '/gallery', label: '图库', icon: Image },
+  { href: '/videos', label: '视频库', icon: Video },
   { href: '/api-keys', label: 'API 密钥', icon: Key },
   { href: '/usage', label: '使用量', icon: BarChart3 },
   { href: '/settings', label: '设置', icon: Settings },
@@ -55,7 +57,7 @@ function SidebarContent({
       {/* Logo - hidden on mobile (shown in top bar instead) */}
       <div className="hidden md:flex h-[var(--topbar-height)] items-center px-5 border-b border-[var(--color-border)]">
         <Link href="/studio" className="text-sm font-semibold text-[var(--color-text)] tracking-tight">
-          Image Relay Studio
+          Relay Studio
         </Link>
       </div>
 
@@ -162,7 +164,7 @@ export function AppSidebar() {
           </svg>
         </button>
         <Link href="/studio" className="text-sm font-semibold text-[var(--color-text)] tracking-tight">
-          Image Relay Studio
+          Relay Studio
         </Link>
         <div className="w-11" /> {/* Spacer for centering */}
       </div>

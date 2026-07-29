@@ -13,20 +13,20 @@ import { createStorageClient } from '@/server/storage';
 import { createTask, executeTask } from '@/server/tasks/executor';
 import type { TaskType } from '@/server/tasks/state-machine';
 import {
-  createGenerationTaskSchema,
-  imageListQuerySchema,
+  createVideoTaskSchema,
+  videoListQuerySchema,
   parseInput,
 } from '@/server/validation/schemas';
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    requireScope(auth, 'images:read');
+    requireScope(auth, 'videos:read');
     const supabase = getSupabaseClient();
 
     const url = new URL(request.url);
     const queryParams = parseInput(
-      imageListQuerySchema,
+      videoListQuerySchema,
       Object.fromEntries(url.searchParams.entries())
     );
     const {
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       .from('generation_assets')
       .select('*', { count: 'exact' })
       .eq('user_id', auth.userId)
-      .eq('media_type', 'image')
+      .eq('media_type', 'video')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     if (taskId) query = query.eq('task_id', taskId);
 
     const { data, error, count } = await query;
-    if (error) return errorResponse(new Error('获取图片失败'), auth.requestId);
+    if (error) return errorResponse(new Error('获取视频失败'), auth.requestId);
 
     // Generate signed URLs for each asset
     const storage = createStorageClient();
@@ -80,23 +80,23 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    requireScope(auth, 'images:write');
+    requireScope(auth, 'videos:write');
     enforceGenerationRateLimit(auth.userId);
 
-    const body = parseInput(createGenerationTaskSchema, await request.json());
+    const body = parseInput(createVideoTaskSchema, await request.json());
     const {
       model: modelCode,
       prompt,
-      size,
-      n,
-      visible_watermark,
+      resolution,
+      ratio,
+      duration,
       reference_asset_ids,
       idempotency_key,
     } = body;
 
     const supabase = getSupabaseClient();
 
-    // 1. Check generation enabled (fail-closed: missing = disabled)
+    // 1. Check generation enabled (fail-closed)
     const { data: genSetting } = await supabase
       .from('system_settings')
       .select('value')
@@ -119,7 +119,13 @@ export async function POST(request: NextRequest) {
       throw new AppError(ErrorCodes.MODEL_NOT_FOUND, '模型不存在或未启用');
     }
 
-    // 3. Check user model permissions
+    // 3. Verify model is a video model
+    const mediaType = (modelConfig.capability_metadata as Record<string, unknown>)?.media_type;
+    if (mediaType !== 'video') {
+      throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不是视频模型');
+    }
+
+    // 4. Check user model permissions
     const { data: quota } = await supabase
       .from('user_quotas')
       .select('*')
@@ -132,38 +138,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Check size permission
-    if (quota?.allowed_sizes && (quota.allowed_sizes as string[]).length > 0) {
-      if (!(quota.allowed_sizes as string[]).includes(size)) {
-        throw new AppError(ErrorCodes.SIZE_NOT_ALLOWED, '此尺寸不在允许范围内');
-      }
-    }
-
-    // 5. Validate size against model
+    // 5. Validate resolution against model supported_sizes
     if (modelConfig.supported_sizes && (modelConfig.supported_sizes as string[]).length > 0) {
-      if (!(modelConfig.supported_sizes as string[]).includes(size)) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, '模型不支持此尺寸');
+      if (!(modelConfig.supported_sizes as string[]).includes(resolution)) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, '模型不支持此分辨率');
       }
     }
 
-    // 6. Validate image count
-    const maxPerRequest = quota?.max_images_per_request || modelConfig.max_images_per_request || 4;
-    if (n < 1 || n > maxPerRequest) {
-      throw new AppError(ErrorCodes.INVALID_REQUEST, '图片数量超出限制');
+    // 6. Validate ratio against capability_metadata.supported_ratios
+    const supportedRatios = (modelConfig.capability_metadata as Record<string, unknown>)?.supported_ratios as string[] | undefined;
+    if (supportedRatios && supportedRatios.length > 0) {
+      if (!supportedRatios.includes(ratio)) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, '模型不支持此宽高比');
+      }
     }
 
-    // Determine task type
-    const taskType: TaskType = reference_asset_ids?.length > 0 ? 'image_to_image' : 'text_to_image';
-
-    if (taskType === 'image_to_image' && !modelConfig.supports_image_to_image) {
-      throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持图生图');
-    }
-
-    if (visible_watermark && !modelConfig.supports_visible_watermark_control) {
-      throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持关闭可见水印');
-    }
-    if (n > 1 && !modelConfig.supports_sequential_generation) {
-      throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持一次生成多张图片');
+    // 7. Determine task type
+    let taskType: TaskType;
+    if (reference_asset_ids && reference_asset_ids.length >= 2) {
+      taskType = 'first_last_frame';
+      if (!modelConfig.supports_multiple_references) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持首尾帧模式');
+      }
+    } else if (reference_asset_ids && reference_asset_ids.length === 1) {
+      taskType = 'image_to_video';
+      if (!modelConfig.supports_image_to_image) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持图生视频');
+      }
+    } else {
+      taskType = 'text_to_video';
+      if (!modelConfig.supports_text_to_image) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持文生视频');
+      }
     }
 
     // Create task via executor
@@ -172,7 +178,7 @@ export async function POST(request: NextRequest) {
       model_code: modelCode,
       task_type: taskType,
       prompt: prompt.trim(),
-      request_parameters: { size, n, visible_watermark, reference_asset_ids },
+      request_parameters: { resolution, ratio, duration, n: 1, reference_asset_ids },
       idempotency_key: idempotency_key || undefined,
       reference_asset_ids: reference_asset_ids?.length > 0 ? reference_asset_ids : undefined,
       requestSource: auth.authMethod === 'apikey' ? 'api' : 'web',
