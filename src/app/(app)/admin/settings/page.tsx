@@ -63,6 +63,7 @@ const SETTING_DEFAULTS: Record<string, string> = {
   maintenance_message: '',
 };
 
+const TEXT_SETTING_KEYS = ['maintenance_message', 'prompt_logging_mode'];
 const DANGER_RED = '#B42318';
 const ACCENT_COLOR = '#006699';
 
@@ -332,7 +333,7 @@ export default function AdminSettingsPage() {
                         }}
                       >
                         {/* Left: Title + Description */}
-                        <div className="flex-1" style={{ minWidth: '0' }}>
+                        <div className="flex-1 md:min-w-[240px]" style={{ minWidth: '0' }}>
                           <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>
                             {SETTING_LABELS[setting.key] || setting.key}
                           </div>
@@ -352,7 +353,7 @@ export default function AdminSettingsPage() {
                             />
                           ) : (
                             <input
-                              type={setting.key === 'maintenance_message' ? 'text' : 'number'}
+                              type={TEXT_SETTING_KEYS.includes(setting.key) ? 'text' : 'number'}
                               value={editValue}
                               onChange={(e) => handleInputChange(setting.key, e.target.value)}
                               style={{
@@ -423,13 +424,21 @@ export default function AdminSettingsPage() {
                   fontWeight: 600,
                   cursor: dangerActionPending ? 'not-allowed' : 'pointer',
                   opacity: dangerActionPending ? 0.6 : 1,
-                  transition: 'opacity 160ms ease-out',
+                  transition: 'opacity 160ms ease-out, background 160ms ease-out',
                   flexShrink: 0,
                   whiteSpace: 'nowrap',
                 }}
                 className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                 onFocus={(e) => { e.currentTarget.style.boxShadow = `0 0 0 3px ${DANGER_RED}1a`; }}
                 onBlur={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
+                onMouseEnter={(e) => {
+                  if (!dangerActionPending) {
+                    e.currentTarget.style.background = isGenerating ? '#8C1A12' : DANGER_RED + '0d';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = isGenerating ? DANGER_RED : '#FFFFFF';
+                }}
               >
                 {dangerActionPending ? '处理中...' : isGenerating ? '紧急停止生成服务' : '恢复生成服务'}
               </button>

@@ -9,9 +9,10 @@ export default function SettingsPage() {
   const { profile, session } = useAuth();
   const originalName = profile?.display_name || '';
   const [displayName, setDisplayName] = useState(originalName);
+  const [savedName, setSavedName] = useState(originalName);
   const [isSaving, setIsSaving] = useState(false);
 
-  const isDirty = useMemo(() => displayName.trim() !== originalName.trim(), [displayName, originalName]);
+  const isDirty = useMemo(() => displayName.trim() !== savedName.trim(), [displayName, savedName]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -26,6 +27,7 @@ export default function SettingsPage() {
         timeout: 10_000,
       });
       if (res.ok) {
+        setSavedName(displayName.trim());
         toast.success('设置已保存');
       } else {
         const data = await res.json();
@@ -39,7 +41,7 @@ export default function SettingsPage() {
   };
 
   const handleCancel = () => {
-    setDisplayName(originalName);
+    setDisplayName(savedName);
   };
 
   return (
@@ -63,7 +65,7 @@ export default function SettingsPage() {
           }}>
             {/* Display Name - editable */}
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4" style={{ padding: '14px 20px', borderBottom: '1px solid rgba(26,26,26,0.06)' }}>
-              <div className="flex-1" style={{ minWidth: '0' }}>
+              <div className="flex-1 md:min-w-[240px]" style={{ minWidth: '0' }}>
                 <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>显示名称</div>
                 <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>用于工作台和任务列表的展示</div>
               </div>
@@ -95,7 +97,7 @@ export default function SettingsPage() {
 
             {/* Email - read-only */}
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4" style={{ padding: '14px 20px', borderBottom: '1px solid rgba(26,26,26,0.06)' }}>
-              <div className="flex-1" style={{ minWidth: '0' }}>
+              <div className="flex-1 md:min-w-[240px]" style={{ minWidth: '0' }}>
                 <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>邮箱</div>
                 <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>登录账号，不可修改</div>
               </div>
@@ -108,7 +110,7 @@ export default function SettingsPage() {
 
             {/* Role - read-only */}
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4" style={{ padding: '14px 20px' }}>
-              <div className="flex-1" style={{ minWidth: '0' }}>
+              <div className="flex-1 md:min-w-[240px]" style={{ minWidth: '0' }}>
                 <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>角色</div>
                 <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>当前账户权限等级</div>
               </div>
