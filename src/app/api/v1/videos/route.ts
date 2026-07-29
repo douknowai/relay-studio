@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       page_size: pageSize,
       favorite,
       task_id: taskId,
+      model_code: modelCode,
     } = queryParams;
 
     let query = supabase
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
 
     if (favorite === 'true') query = query.eq('favorite', true);
     if (taskId) query = query.eq('task_id', taskId);
+    if (modelCode) query = query.eq('model_code', modelCode);
 
     const { data, error, count } = await query;
     if (error) return errorResponse(new Error('获取视频失败'), auth.requestId);
@@ -172,13 +174,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Determine reference roles for image-to-video / first-last-frame
+    let referenceRoles: string[] | undefined;
+    if (reference_asset_ids && reference_asset_ids.length >= 2) {
+      referenceRoles = ['first_frame', 'last_frame'];
+    } else if (reference_asset_ids && reference_asset_ids.length === 1) {
+      referenceRoles = ['first_frame'];
+    }
+
     // Create task via executor
     const task = await createTask({
       user_id: auth.userId,
       model_code: modelCode,
       task_type: taskType,
       prompt: prompt.trim(),
-      request_parameters: { resolution, ratio, duration, n: 1, reference_asset_ids },
+      request_parameters: { resolution, ratio, duration, n: 1, reference_asset_ids, reference_roles: referenceRoles },
       idempotency_key: idempotency_key || undefined,
       reference_asset_ids: reference_asset_ids?.length > 0 ? reference_asset_ids : undefined,
       requestSource: auth.authMethod === 'apikey' ? 'api' : 'web',

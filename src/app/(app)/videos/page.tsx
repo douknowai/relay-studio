@@ -17,6 +17,8 @@ export default function VideosPage() {
   const [modelFilter, setModelFilter] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [playingAsset, setPlayingAsset] = useState<GenerationAsset | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const pageSize = 24;
 
   const fetchAssets = useCallback(async () => {
@@ -25,6 +27,7 @@ export default function VideosPage() {
     try {
       const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
       if (favoriteOnly) params.set('favorite', 'true');
+      if (modelFilter) params.set('model_code', modelFilter);
 
       const res = await fetchWithTimeout(`/api/v1/videos?${params}`, {
         headers: { 'x-session': session?.access_token || '' },
@@ -42,7 +45,7 @@ export default function VideosPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [session, page, favoriteOnly]);
+  }, [session, page, favoriteOnly, modelFilter]);
 
   useEffect(() => {
     if (session) fetchAssets();
@@ -96,6 +99,25 @@ export default function VideosPage() {
       fetchAssets();
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
+    }
+  };
+
+  const downloadAsset = async (asset: GenerationAsset) => {
+    if (!asset.url) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(asset.url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `video-${asset.id.slice(0, 8)}.mp4`;
+      link.click();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      setError('下载失败');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -154,7 +176,8 @@ export default function VideosPage() {
           {assets.map((asset) => (
             <div
               key={asset.id}
-              className="group relative aspect-video rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-subtle)]"
+              onClick={() => setPlayingAsset(asset)}
+              className="group relative aspect-video rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-subtle)] cursor-pointer"
             >
               {asset.url || asset.thumbnail_url ? (
                 asset.thumbnail_url ? (
@@ -185,6 +208,12 @@ export default function VideosPage() {
                   </svg>
                 </div>
               </div>
+              {/* Duration tag */}
+              {asset.duration && (
+                <span className="absolute top-1.5 right-1.5 text-[10px] text-white/90 bg-black/60 px-1.5 py-0.5 rounded-sm font-mono pointer-events-none">
+                  {asset.duration}s
+                </span>
+              )}
               {/* Mobile: always visible actions, Desktop: hover */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100">
                 <div className="absolute bottom-0 left-0 right-0 p-2 flex justify-between items-end">
@@ -303,6 +332,51 @@ export default function VideosPage() {
           <div className="flex gap-1">
             <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-2.5 py-1 text-xs border border-[var(--color-border)] rounded-[var(--radius-sm)] disabled:opacity-40 tap-target">上一页</button>
             <button onClick={() => setPage(page + 1)} disabled={page * pageSize >= total} className="px-2.5 py-1 text-xs border border-[var(--color-border)] rounded-[var(--radius-sm)] disabled:opacity-40 tap-target">下一页</button>
+          </div>
+        </div>
+      )}
+
+      {/* Video Playback Modal */}
+      {playingAsset && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setPlayingAsset(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setPlayingAsset(null)}
+              className="absolute -top-9 right-0 text-white/80 hover:text-white text-sm tap-target"
+            >
+              关闭 ✕
+            </button>
+            {playingAsset.url ? (
+              <video
+                src={playingAsset.url}
+                controls
+                autoPlay
+                className="w-full rounded-[var(--radius-md)] bg-black"
+              />
+            ) : (
+              <div className="aspect-video flex items-center justify-center text-white/60 text-sm">
+                视频地址不可用
+              </div>
+            )}
+            <div className="flex items-center justify-between mt-3 px-1">
+              <div className="text-xs text-white/60">
+                {playingAsset.width && playingAsset.height && `${playingAsset.width}×${playingAsset.height}`}
+                {playingAsset.duration && ` · ${playingAsset.duration}s`}
+              </div>
+              <button
+                onClick={() => downloadAsset(playingAsset)}
+                disabled={downloading}
+                className="text-xs text-white/80 hover:text-white border border-white/20 px-3 py-1.5 rounded-[var(--radius-sm)] disabled:opacity-50 tap-target"
+              >
+                {downloading ? '下载中...' : '下载'}
+              </button>
+            </div>
           </div>
         </div>
       )}

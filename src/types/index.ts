@@ -119,6 +119,8 @@ export interface GenerationAsset {
   visible_watermark_disabled: boolean;
   favorite: boolean;
   media_type: MediaType;
+  duration: number | null;
+  model_code: string | null;
   url?: string;
   thumbnail_url?: string;
   deleted_at: string | null;

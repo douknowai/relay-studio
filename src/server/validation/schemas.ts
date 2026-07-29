@@ -74,6 +74,7 @@ export const videoListQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(100).default(24),
   favorite: z.enum(['true', 'false']).optional(),
   task_id: z.string().uuid().optional(),
+  model_code: z.string().optional(),
 });
 
 export const updateImageSchema = z.object({
