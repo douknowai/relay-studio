@@ -1,94 +1,139 @@
-node_modules
-dist
-.DS_Store
-*.swp
-.git/*
-__pycache__/
-*.pyc
-.venv/*
-*.o
-*.a
-/vendor
-*.egg-info/
-/.env
+# Image Relay Studio
+# 原则：真实凭据、个人开发工具配置、依赖、缓存和构建产物不得进入版本库。
+
+# 依赖与包管理器缓存
+/node_modules/
+/.pnpm-store/
+.pnp
+.pnp.*
+/.yarn/
+
+# 构建、测试与分析产物
+/.next/
+/dist/
+/build/
+/out/
+/.turbo/
+/.cache/
+/.parcel-cache/
+/.rsbuild/
+/coverage/
+/.nyc_output/
+/playwright-report/
+/test-results/
+/storybook-static/
+*.lcov
+*.tsbuildinfo
+
+# 环境变量与本地配置
+# 只允许提交不含真实值的示例文件。
 .env
-.cozeproj/reduction
+.env.*
+!.env.example
+!.env.*.example
+*.local
+config.local.*
 
-# JS/TS bundlers & build outputs
-.next
-.nuxt
-.turbo
-.vercel
-.parcel-cache
-.cache
-coverage
-storybook-static
+# 密钥、证书、服务账号和凭据
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kdbx
+*.ovpn
+service-account*.json
+credentials*.json
+secrets.*
+/.secrets/
+/secrets/
+/.aws/
+/.azure/
+/.gcloud/
+/.kube/
 
-# Package manager artifacts
-.pnp*
-.npm
-
-# Python tooling
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.tox/
-
-# Go tooling
-bin/
-*.test
-
-# Editor / IDE
-.vscode/
-.idea/
+# 编辑器、IDE 与 AI 开发工具的个人配置
+/.vscode/
+/.idea/
+/.fleet/
+/.zed/
+/.history/
+/.cursor/
+/.claude/
+/.codex/
+/.agents/
+/.windsurf/
+/.continue/
+/.aider*
 *.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
 
-# OS / misc
-Thumbs.db
-ehthumbs.db
+# 平台本地状态
+# `.coze` 是项目运行清单，需要保留；这里只忽略本地缓存与日志。
+/.vercel/
+/.netlify/
+/.supabase/
+/supabase/.branches/
+/supabase/.temp/
+/.cozeproj/
+/.coze-logs
+/.codegraph/
+/.codegraph
 
-# Logs
-output.log
+# 本地调试素材和个人脚本
+# 可发布静态资源应放入 public/。
+/assets/
+/scripts/local/
+/.preview
+
+# 日志、进程与临时文件
 *.log
 *.log.*
-logs/
+/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.pid
+*.pid.lock
+*.seed
+*.tmp
+*.temp
+/.tmp/
+/.temp/
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# 视频文件
-*.mp4
-*.avi
-*.mov
-*.wmv
-*.flv
-*.mkv
-*.webm
-*.m4v
-*.mpeg
-*.mpg
-*.3gp
-*.f4v
-*.rmvb
-*.vob
+# Python/辅助工具缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+/.venv/
+/venv/
+/.pytest_cache/
+/.mypy_cache/
+/.ruff_cache/
+/.tox/
+/.eslintcache
+/.stylelintcache
 
-# 归档文件
-*.iso
-*.dmg
-*.rar
-*.zip
-*.gz
+# 操作系统文件
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
 
-# 文档类也默认加入
-*.pdf
-*.docx
-*.doc
-*.xlsx
-*.xls
-*.ppt
-*.pptx
-*.xlsx
-*.csv
-
-# Preview files
-.preview
-
-# CodeGraph index
-.codegraph
+# 其他本地产物
+/vendor/
+/bin/
+/.optional-files
