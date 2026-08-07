@@ -117,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     let timedOut = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     async function initAuth() {
       try {
@@ -161,21 +162,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } finally {
         if (mounted && !timedOut) {
+          // 标记 init 已完成，防止 setTimeout 闭包在 initAuth 成功后仍触发错误
+          timedOut = true;
+          clearTimeout(timeoutId);
           setIsLoading(false);
         }
       }
     }
 
-    initAuth();
-
     // 安全超时：无论 initAuth 是否完成，最多 AUTH_INIT_TIMEOUT_MS 后解除 loading
-    const timeoutId = setTimeout(() => {
-      if (mounted && isLoading) {
+    // 注意：不能用 isLoading（stale closure 捕获初始值 true），用 timedOut 标志协调
+    timeoutId = setTimeout(() => {
+      if (mounted && !timedOut) {
         timedOut = true;
         setIsLoading(false);
         setAuthError((prev) => prev || '认证初始化超时，请检查网络连接');
       }
     }, AUTH_INIT_TIMEOUT_MS);
+
+    initAuth();
 
     // Listen for auth changes
     let subscription: { unsubscribe: () => void } | null = null;
