@@ -120,13 +120,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let timeoutId: ReturnType<typeof setTimeout>;
 
     async function initAuth() {
+      const t0 = Date.now();
+      const diag = (step: string) => console.warn(`[AUTH-DIAG] ${step} +${Date.now() - t0}ms`);
       try {
+        diag('start: calling getSupabaseBrowserClientAsync');
         const supabase = await getSupabaseBrowserClientAsync();
         if (!mounted) return;
+        diag('got supabase client');
 
         try {
+          diag('calling getSession');
           const { data: { session: currentSession } } = await supabase.auth.getSession();
           if (!mounted) return;
+          diag(`getSession done, session=${currentSession ? 'exists' : 'null'}`);
 
           if (currentSession?.user) {
             setSession(currentSession);
@@ -157,10 +163,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (err) {
+        diag(`error: ${err instanceof Error ? err.message : String(err)}`);
         if (mounted) {
           setAuthError(err instanceof Error ? err.message : '认证初始化失败');
         }
       } finally {
+        diag('finally block');
         if (mounted && !timedOut) {
           // 标记 init 已完成，防止 setTimeout 闭包在 initAuth 成功后仍触发错误
           timedOut = true;
@@ -175,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     timeoutId = setTimeout(() => {
       if (mounted && !timedOut) {
         timedOut = true;
+        console.warn(`[AUTH-DIAG] TIMEOUT fired after ${AUTH_INIT_TIMEOUT_MS}ms`);
         setIsLoading(false);
         setAuthError((prev) => prev || '认证初始化超时，请检查网络连接');
       }

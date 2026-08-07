@@ -460,6 +460,14 @@ export async function executeTask(taskId: string, customHeaders?: Record<string,
 }
 
 /**
+ * Video assets are far larger than images (a 1080p/10s clip can be tens of
+ * MB), so the image-oriented MAX_DOWNLOAD_BYTES / 15s fetch defaults would
+ * falsely fail video persistence. Videos get their own, larger limits.
+ */
+const MAX_VIDEO_DOWNLOAD_BYTES = 512 * 1024 * 1024;
+const VIDEO_DOWNLOAD_TIMEOUT_MS = 180_000;
+
+/**
  * Execute a video generation task using the Coze VideoGenerationClient.
  * Downloads the generated video, persists to object storage, and creates
  * a generation_assets record with media_type='video'.
@@ -512,8 +520,13 @@ async function executeVideoTask(
     const latencyMs = Date.now() - startTime;
 
     if (result.success && result.video_url) {
-      // Download video and persist to object storage
-      const { buffer, contentType } = await fetchToBuffer(result.video_url);
+      // Download video and persist to object storage. fetchToBuffer
+      // still applies the SSRF guard; only the size/timeout budget is
+      // raised for video payloads.
+      const { buffer, contentType } = await fetchToBuffer(result.video_url, {
+        maxBytes: MAX_VIDEO_DOWNLOAD_BYTES,
+        timeoutMs: VIDEO_DOWNLOAD_TIMEOUT_MS,
+      });
       const ext = contentType.includes('mp4') ? 'mp4' : 'webm';
       const targetKey = `users/${task.user_id}/generated/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${task.id}.${ext}`;
       const objectKey = await uploadFile(buffer, targetKey, contentType);
