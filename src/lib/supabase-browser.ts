@@ -6,11 +6,9 @@ let cachedConfig: { url: string; anonKey: string } | null = null;
 
 function getOrCreateClient(url: string, anonKey: string): SupabaseClient {
   if (browserClient) {
-    console.warn('[SB-DIAG] returning existing client');
     return browserClient;
   }
 
-  console.warn('[SB-DIAG] createClient start');
   browserClient = createClient(url, anonKey, {
     auth: {
       autoRefreshToken: true,
@@ -18,7 +16,6 @@ function getOrCreateClient(url: string, anonKey: string): SupabaseClient {
       detectSessionInUrl: true,
     },
   });
-  console.warn('[SB-DIAG] createClient done');
 
   return browserClient;
 }
@@ -43,18 +40,15 @@ export async function getSupabaseBrowserClientAsync(): Promise<SupabaseClient> {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (url && anonKey) {
-    console.warn(`[SB-DIAG] using env/cached: url=${url?.substring(0, 40)}`);
     return getOrCreateClient(url, anonKey);
   }
 
   // Use cached config if SupabaseConfigProvider already fetched it
   if (cachedConfig) {
-    console.warn('[SB-DIAG] using cachedConfig');
     return getOrCreateClient(cachedConfig.url, cachedConfig.anonKey);
   }
 
   // Fallback: fetch from API with timeout
-  console.warn('[SB-DIAG] fallback: fetching /api/supabase-config');
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CONFIG_FETCH_TIMEOUT_MS);
 
@@ -62,7 +56,6 @@ export async function getSupabaseBrowserClientAsync(): Promise<SupabaseClient> {
     const res = await fetch('/api/supabase-config', { signal: controller.signal });
     if (!res.ok) throw new Error('Supabase 配置加载失败');
     const data = await res.json();
-    console.warn(`[SB-DIAG] config fetched: url=${data.url?.substring(0, 40)}`);
     cachedConfig = { url: data.url, anonKey: data.anonKey };
     return getOrCreateClient(data.url, data.anonKey);
   } catch (err) {

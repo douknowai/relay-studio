@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { Session, User, AuthError } from '@supabase/supabase-js';
+import { Session, User, AuthError, SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseBrowserClientAsync } from '@/lib/supabase-browser';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
 
@@ -73,6 +73,39 @@ function mapAuthError(err: unknown): string {
   return '登录失败，请稍后重试';
 }
 
+/** getSession 单独超时：Supabase token 刷新网络请求可能永久挂起 */
+const GET_SESSION_TIMEOUT_MS = 5_000;
+
+/**
+ * 带超时的 getSession 包装。
+ * 若 Supabase 客户端因网络问题（如 token 刷新请求挂起）导致 getSession 永不 resolve，
+ * 在超时后清除本地 session 并视为未登录，避免无限 loading。
+ */
+async function getSessionWithTimeout(supabase: SupabaseClient) {
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('GET_SESSION_TIMEOUT')), GET_SESSION_TIMEOUT_MS),
+  );
+  try {
+    return await Promise.race([
+      supabase.auth.getSession(),
+      timeoutPromise,
+    ]);
+  } catch (err) {
+    if (err instanceof Error && err.message === 'GET_SESSION_TIMEOUT') {
+      console.warn('[AUTH] getSession timed out, clearing local session');
+      // 直接清 localStorage，避免 signOut() 也挂起
+      try {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('sb-')) localStorage.removeItem(key);
+        }
+      } catch { /* ignore */ }
+      return { data: { session: null }, error: null };
+    }
+    throw err;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -120,19 +153,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let timeoutId: ReturnType<typeof setTimeout>;
 
     async function initAuth() {
-      const t0 = Date.now();
-      const diag = (step: string) => console.warn(`[AUTH-DIAG] ${step} +${Date.now() - t0}ms`);
       try {
-        diag('start: calling getSupabaseBrowserClientAsync');
         const supabase = await getSupabaseBrowserClientAsync();
         if (!mounted) return;
-        diag('got supabase client');
 
         try {
-          diag('calling getSession');
-          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          const { data: { session: currentSession } } = await getSessionWithTimeout(supabase);
           if (!mounted) return;
-          diag(`getSession done, session=${currentSession ? 'exists' : 'null'}`);
 
           if (currentSession?.user) {
             setSession(currentSession);
@@ -163,12 +190,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (err) {
-        diag(`error: ${err instanceof Error ? err.message : String(err)}`);
         if (mounted) {
           setAuthError(err instanceof Error ? err.message : '认证初始化失败');
         }
       } finally {
-        diag('finally block');
         if (mounted && !timedOut) {
           // 标记 init 已完成，防止 setTimeout 闭包在 initAuth 成功后仍触发错误
           timedOut = true;
@@ -183,7 +208,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     timeoutId = setTimeout(() => {
       if (mounted && !timedOut) {
         timedOut = true;
-        console.warn(`[AUTH-DIAG] TIMEOUT fired after ${AUTH_INIT_TIMEOUT_MS}ms`);
         setIsLoading(false);
         setAuthError((prev) => prev || '认证初始化超时，请检查网络连接');
       }
