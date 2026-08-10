@@ -62,7 +62,7 @@ export const createVideoTaskSchema = z.object({
   model: z.string().min(1, 'Model code is required'),
   prompt: z.string().min(1, 'Prompt is required').max(4000, 'Prompt too long'),
   resolution: z.enum(['480p', '720p', '1080p']).optional().default('720p'),
-  ratio: z.enum(['16:9', '9:16', '1:1', '4:3', '21:9']).optional().default('16:9'),
+  ratio: z.enum(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']).optional().default('16:9'),
   duration: z.number().int().min(5).max(10).optional().default(5),
   reference_asset_ids: z.array(z.string().uuid()).max(2).optional().default([]),
   idempotency_key: z.string().max(128).optional(),

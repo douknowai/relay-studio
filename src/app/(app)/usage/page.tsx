@@ -14,10 +14,24 @@ interface UsageData {
     max_concurrent: number;
     current_concurrent: number;
   };
+  image_usage?: {
+    daily_limit: number;
+    daily_used: number;
+    monthly_limit: number;
+    monthly_used: number;
+  };
+  video_usage?: {
+    daily_limit: number;
+    daily_used: number;
+    monthly_limit: number;
+    monthly_used: number;
+  };
   generation_enabled: boolean;
   recent_usage: Array<{
     date: string;
     count: number;
+    image_count?: number;
+    video_count?: number;
   }>;
 }
 
@@ -64,9 +78,13 @@ export default function UsagePage() {
     return <EmptyState message="数据不可用" />;
   }
 
-  const { quota } = usage;
+  const { quota, image_usage, video_usage } = usage;
   const dailyPercent = quota.daily_limit > 0 ? Math.round((quota.daily_used / quota.daily_limit) * 100) : 0;
   const monthlyPercent = quota.monthly_limit > 0 ? Math.round((quota.monthly_used / quota.monthly_limit) * 100) : 0;
+
+  const hasImageUsage = image_usage && (image_usage.daily_limit > 0 || image_usage.daily_used > 0);
+  const hasVideoUsage = video_usage && (video_usage.daily_limit > 0 || video_usage.daily_used > 0);
+  const hasCategoryData = hasImageUsage || hasVideoUsage;
 
   const maxRecentCount = Math.max(...(usage.recent_usage?.map(r => r.count) || [1]), 1);
 
@@ -80,42 +98,100 @@ export default function UsagePage() {
         </div>
       )}
 
-      {/* Quota Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-6">
-        {/* Daily Quota */}
-        <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-[var(--color-text-muted)]">今日额度</span>
-            <span className="text-xs text-[var(--color-text)]">
-              {quota.daily_used} / {quota.daily_limit}
-            </span>
-          </div>
-          <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(dailyPercent, 100)}%` }}
-            />
-          </div>
-          <div className="mt-1.5 text-[10px] text-[var(--color-text-subtle)]">{dailyPercent}% 已使用</div>
-        </div>
+      {/* Category-specific Quota Cards */}
+      {hasCategoryData ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-6">
+          {/* Image Usage */}
+          {hasImageUsage && (
+            <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 rounded-full bg-blue-400" />
+                <span className="text-xs font-medium text-[var(--color-text-muted)]">图像额度</span>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-[var(--color-text-subtle)]">今日</span>
+                    <span className="text-xs text-[var(--color-text)]">{image_usage.daily_used} / {image_usage.daily_limit}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(image_usage.daily_limit > 0 ? (image_usage.daily_used / image_usage.daily_limit) * 100 : 0, 100)}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-[var(--color-text-subtle)]">本月</span>
+                    <span className="text-xs text-[var(--color-text)]">{image_usage.monthly_used} / {image_usage.monthly_limit}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(image_usage.monthly_limit > 0 ? (image_usage.monthly_used / image_usage.monthly_limit) * 100 : 0, 100)}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-        {/* Monthly Quota */}
-        <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-[var(--color-text-muted)]">本月额度</span>
-            <span className="text-xs text-[var(--color-text)]">
-              {quota.monthly_used} / {quota.monthly_limit}
-            </span>
-          </div>
-          <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(monthlyPercent, 100)}%` }}
-            />
-          </div>
-          <div className="mt-1.5 text-[10px] text-[var(--color-text-subtle)]">{monthlyPercent}% 已使用</div>
+          {/* Video Usage */}
+          {hasVideoUsage && (
+            <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 rounded-full bg-purple-400" />
+                <span className="text-xs font-medium text-[var(--color-text-muted)]">视频额度</span>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-[var(--color-text-subtle)]">今日</span>
+                    <span className="text-xs text-[var(--color-text)]">{video_usage.daily_used} / {video_usage.daily_limit}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-400 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(video_usage.daily_limit > 0 ? (video_usage.daily_used / video_usage.daily_limit) * 100 : 0, 100)}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-[var(--color-text-subtle)]">本月</span>
+                    <span className="text-xs text-[var(--color-text)]">{video_usage.monthly_used} / {video_usage.monthly_limit}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-400 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(video_usage.monthly_limit > 0 ? (video_usage.monthly_used / video_usage.monthly_limit) * 100 : 0, 100)}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      ) : (
+        /* Fallback: total quota cards when no category data */
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-6">
+          <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">今日额度</span>
+              <span className="text-xs text-[var(--color-text)]">{quota.daily_used} / {quota.daily_limit}</span>
+            </div>
+            <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
+              <div className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(dailyPercent, 100)}%` }} />
+            </div>
+            <div className="mt-1.5 text-[10px] text-[var(--color-text-subtle)]">{dailyPercent}% 已使用</div>
+          </div>
+          <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-[var(--color-text-muted)]">本月额度</span>
+              <span className="text-xs text-[var(--color-text)]">{quota.monthly_used} / {quota.monthly_limit}</span>
+            </div>
+            <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
+              <div className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(monthlyPercent, 100)}%` }} />
+            </div>
+            <div className="mt-1.5 text-[10px] text-[var(--color-text-subtle)]">{monthlyPercent}% 已使用</div>
+          </div>
+        </div>
+      )}
 
       {/* Concurrent */}
       <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)] mb-6">
@@ -127,7 +203,7 @@ export default function UsagePage() {
         </div>
       </div>
 
-      {/* Recent Usage Chart - simple bar chart */}
+      {/* Recent Usage Chart */}
       {usage.recent_usage && usage.recent_usage.length > 0 && (
         <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
           <h2 className="text-xs font-medium text-[var(--color-text-muted)] mb-3">近 7 天使用趋势</h2>
@@ -135,16 +211,33 @@ export default function UsagePage() {
             {usage.recent_usage.map((item) => (
               <div key={item.date} className="flex-1 flex flex-col items-center gap-1">
                 <span className="text-[10px] text-[var(--color-text-subtle)]">{item.count}</span>
-                <div
-                  className="w-full bg-[var(--color-accent)]/70 rounded-t-sm min-h-[4px] transition-all duration-300"
-                  style={{ height: `${Math.max((item.count / maxRecentCount) * 80, 4)}px` }}
-                />
+                <div className="w-full flex flex-col gap-0.5" style={{ height: `${Math.max((item.count / maxRecentCount) * 80, 4)}px`, justifyContent: 'flex-end' }}>
+                  {item.image_count !== undefined && item.video_count !== undefined ? (
+                    <>
+                      <div className="w-full bg-blue-400/70 rounded-t-sm" style={{ height: `${Math.max((item.image_count / maxRecentCount) * 80, item.image_count > 0 ? 2 : 0)}px` }} />
+                      <div className="w-full bg-purple-400/70 rounded-b-sm" style={{ height: `${Math.max((item.video_count / maxRecentCount) * 80, item.video_count > 0 ? 2 : 0)}px` }} />
+                    </>
+                  ) : (
+                    <div className="w-full bg-[var(--color-accent)]/70 rounded-t-sm min-h-[4px] transition-all duration-300"
+                      style={{ height: '100%' }} />
+                  )}
+                </div>
                 <span className="text-[9px] md:text-[10px] text-[var(--color-text-subtle)]">
                   {new Date(item.date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
                 </span>
               </div>
             ))}
           </div>
+          {hasCategoryData && (
+            <div className="flex items-center gap-4 mt-2">
+              <span className="flex items-center gap-1 text-[10px] text-[var(--color-text-subtle)]">
+                <span className="w-2 h-2 rounded-sm bg-blue-400/70" />图像
+              </span>
+              <span className="flex items-center gap-1 text-[10px] text-[var(--color-text-subtle)]">
+                <span className="w-2 h-2 rounded-sm bg-purple-400/70" />视频
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

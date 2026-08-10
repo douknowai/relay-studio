@@ -21,31 +21,65 @@ export async function GET(request: NextRequest) {
 
     const quotaUsage = await getQuotaUsage(auth.userId);
 
-    // Today stats
+    // Today stats - separate by type
     const { data: todayRecords } = await supabase
       .from('usage_records')
-      .select('status, latency_ms')
+      .select('status, latency_ms, model_config_id')
       .eq('user_id', auth.userId)
       .gte('created_at', today);
 
-    const todayTotal = todayRecords?.length || 0;
-    const todaySucceeded = todayRecords?.filter((r: { status: string }) => r.status === 'succeeded').length || 0;
-    const todayFailed = todayRecords?.filter((r: { status: string }) => r.status === 'failed').length || 0;
-    const todayLatencies = todayRecords?.filter((r: { latency_ms: number | null }) => r.latency_ms).map((r: { latency_ms: number }) => r.latency_ms) || [];
-    const avgLatency = todayLatencies.length > 0
-      ? todayLatencies.reduce((a: number, b: number) => a + b, 0) / todayLatencies.length
-      : null;
+    // Get model configs to determine type
+    const modelIds = [...new Set((todayRecords || []).map((r: { model_config_id: string }) => r.model_config_id))];
+    const { data: todayModelConfigs } = modelIds.length > 0
+      ? await supabase.from('model_configs').select('id, code, display_name, provider_type').in('id', modelIds)
+      : { data: [] };
+    const modelTypeMap = new Map(
+      (todayModelConfigs || []).map((m: { id: string; provider_type: string }) => [m.id, m.provider_type])
+    );
 
-    // Monthly stats
+    const todayImageRecords = (todayRecords || []).filter((r: { model_config_id: string }) => {
+      const pt = modelTypeMap.get(r.model_config_id);
+      return pt && !pt.includes('video');
+    });
+    const todayVideoRecords = (todayRecords || []).filter((r: { model_config_id: string }) => {
+      const pt = modelTypeMap.get(r.model_config_id);
+      return pt && pt.includes('video');
+    });
+
+    const calcStats = (records: Array<{ status: string; latency_ms: number | null }>) => {
+      const total = records.length;
+      const succeeded = records.filter((r) => r.status === 'succeeded').length;
+      const failed = records.filter((r) => r.status === 'failed').length;
+      const latencies = records.filter((r) => r.latency_ms).map((r) => r.latency_ms as number);
+      const avgLatency = latencies.length > 0
+        ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+        : null;
+      return { total, succeeded, failed, avg_latency_ms: avgLatency };
+    };
+
+    // Monthly stats - separate by type
     const { data: monthlyRecords } = await supabase
       .from('usage_records')
-      .select('status')
+      .select('status, model_config_id')
       .eq('user_id', auth.userId)
       .gte('created_at', monthStart);
 
-    const monthlyTotal = monthlyRecords?.length || 0;
-    const monthlySucceeded = monthlyRecords?.filter((r: { status: string }) => r.status === 'succeeded').length || 0;
-    const monthlyFailed = monthlyRecords?.filter((r: { status: string }) => r.status === 'failed').length || 0;
+    const monthlyModelIds = [...new Set((monthlyRecords || []).map((r: { model_config_id: string }) => r.model_config_id))];
+    const { data: monthlyModelConfigs } = monthlyModelIds.length > 0
+      ? await supabase.from('model_configs').select('id, code, display_name, provider_type').in('id', monthlyModelIds)
+      : { data: [] };
+    const monthlyModelTypeMap = new Map(
+      (monthlyModelConfigs || []).map((m: { id: string; provider_type: string }) => [m.id, m.provider_type])
+    );
+
+    const monthlyImageRecords = (monthlyRecords || []).filter((r: { model_config_id: string }) => {
+      const pt = monthlyModelTypeMap.get(r.model_config_id);
+      return pt && !pt.includes('video');
+    });
+    const monthlyVideoRecords = (monthlyRecords || []).filter((r: { model_config_id: string }) => {
+      const pt = monthlyModelTypeMap.get(r.model_config_id);
+      return pt && pt.includes('video');
+    });
 
     // By model
     const { data: modelRecords } = await supabase
@@ -54,26 +88,28 @@ export async function GET(request: NextRequest) {
       .eq('user_id', auth.userId)
       .gte('created_at', monthStart);
 
-    const modelStats = new Map<string, { count: number; success: number; display_name: string }>();
+    const modelStats = new Map<string, { count: number; success: number; display_name: string; provider_type: string }>();
     for (const r of (modelRecords || [])) {
-      const existing = modelStats.get(r.model_config_id) || { count: 0, success: 0, display_name: '' };
+      const existing = modelStats.get(r.model_config_id) || { count: 0, success: 0, display_name: '', provider_type: '' };
       existing.count++;
       if (r.status === 'succeeded') existing.success++;
       modelStats.set(r.model_config_id, existing);
     }
 
     // Get model names
-    const modelIds = Array.from(modelStats.keys());
-    const { data: modelConfigs } = await supabase
-      .from('model_configs')
-      .select('id, display_name')
-      .in('id', modelIds);
+    const allModelIds = Array.from(modelStats.keys());
+    const { data: modelConfigs } = allModelIds.length > 0
+      ? await supabase.from('model_configs').select('id, code, display_name, provider_type').in('id', allModelIds)
+      : { data: [] };
 
     const byModel = Array.from(modelStats.entries()).map(([id, stats]) => {
       const config = modelConfigs?.find((m: { id: string }) => m.id === id);
+      const providerType = config?.provider_type || '';
       return {
-        model_code: id,
+        model_id: id,
+        model_code: config?.code || id,
         display_name: config?.display_name || id,
+        type: providerType.includes('video') ? 'video' : 'image',
         count: stats.count,
         success_rate: stats.count > 0 ? stats.success / stats.count : 0,
       };
@@ -88,24 +124,28 @@ export async function GET(request: NextRequest) {
 
     return successResponse({
       quota: {
-        daily_limit: quota?.daily_image_limit || 10,
-        daily_used: quotaUsage.daily_used,
-        monthly_limit: quota?.monthly_image_limit || 100,
-        monthly_used: quotaUsage.monthly_used,
+        image: {
+          daily_limit: quota?.daily_image_limit || 10,
+          daily_used: quotaUsage.daily_used,
+          monthly_limit: quota?.monthly_image_limit || 100,
+          monthly_used: quotaUsage.monthly_used,
+        },
+        video: {
+          daily_limit: quota?.daily_video_limit || 10,
+          daily_used: quotaUsage.daily_video_used,
+          monthly_limit: quota?.monthly_video_limit || 50,
+          monthly_used: quotaUsage.monthly_video_used,
+        },
         max_concurrent: quota?.max_concurrent_tasks || 2,
         current_concurrent: quotaUsage.active_tasks,
       },
       today: {
-        total_tasks: todayTotal,
-        succeeded: todaySucceeded,
-        failed: todayFailed,
-        avg_latency_ms: avgLatency,
+        image: calcStats(todayImageRecords as unknown as Array<{ status: string; latency_ms: number | null }>),
+        video: calcStats(todayVideoRecords as unknown as Array<{ status: string; latency_ms: number | null }>),
       },
       monthly: {
-        total_tasks: monthlyTotal,
-        succeeded: monthlySucceeded,
-        failed: monthlyFailed,
-        avg_latency_ms: null,
+        image: calcStats(monthlyImageRecords as unknown as Array<{ status: string; latency_ms: number | null }>),
+        video: calcStats(monthlyVideoRecords as unknown as Array<{ status: string; latency_ms: number | null }>),
       },
       by_model: byModel,
       generation_enabled: genSetting?.value === 'true',

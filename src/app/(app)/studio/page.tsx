@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
 import { ModelConfig, TaskStatus } from '@/types';
+import type { VideoCapabilityMetadata } from '@/types';
 
 interface QuotaInfo {
   daily_limit: number;
@@ -13,6 +14,14 @@ interface QuotaInfo {
   monthly_used: number;
   max_concurrent: number;
   current_concurrent: number;
+  daily_image_used?: number;
+  daily_image_limit?: number;
+  monthly_image_used?: number;
+  monthly_image_limit?: number;
+  daily_video_used?: number;
+  daily_video_limit?: number;
+  monthly_video_used?: number;
+  monthly_video_limit?: number;
 }
 
 interface GeneratedImage {
@@ -82,6 +91,18 @@ export default function StudioPage() {
   const [lastFrameAssetId, setLastFrameAssetId] = useState<string | null>(null);
 
   const selectedModel = models.find(m => m.code === selectedModelCode);
+
+  // Video capabilities derived from selected model
+  const videoMeta = selectedModel?.capability_metadata as VideoCapabilityMetadata | undefined;
+  const videoCapResolutions: string[] = videoMeta?.supported_resolutions ?? ['480p', '720p', '1080p'];
+  const videoCapRatios: string[] = videoMeta?.supported_ratios ?? ['16:9', '9:16', '1:1'];
+  const videoCapDurations: number[] = videoMeta?.supported_durations ?? [5, 10];
+
+  // Models filtered by current media mode
+  const filteredModels = models.filter(m => {
+    const mt = m.capability_metadata?.media_type ?? (m.provider_type?.includes('video') ? 'video' : 'image');
+    return mt === mediaMode;
+  });
 
   // Fetch models
   useEffect(() => {
@@ -599,14 +620,27 @@ export default function StudioPage() {
                 value={selectedModelCode}
                 onChange={(e) => {
                   setSelectedModelCode(e.target.value);
-                  const model = models.find(m => m.code === e.target.value);
+                  const model = filteredModels.find(m => m.code === e.target.value);
                   if (model?.supported_sizes?.[0]) {
                     setSize(model.supported_sizes[0]);
+                  }
+                  // Set video defaults from model capabilities
+                  const cap = model?.capability_metadata as Record<string, unknown> | undefined;
+                  if (cap) {
+                    if (Array.isArray(cap.supported_resolutions) && cap.supported_resolutions.length > 0) {
+                      setVideoResolution(cap.default_resolution as string || cap.supported_resolutions[0] as string);
+                    }
+                    if (Array.isArray(cap.supported_ratios) && cap.supported_ratios.length > 0) {
+                      setVideoRatio(cap.default_ratio as string || cap.supported_ratios[0] as string);
+                    }
+                    if (Array.isArray(cap.supported_durations) && cap.supported_durations.length > 0) {
+                      setVideoDuration(cap.default_duration as number || cap.supported_durations[0] as number);
+                    }
                   }
                 }}
                 className="w-full px-3 py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
               >
-                {models.map((model) => (
+                {filteredModels.map((model) => (
                   <option key={model.code} value={model.code}>{model.display_name}</option>
                 ))}
               </select>
@@ -659,7 +693,7 @@ export default function StudioPage() {
               <div>
                 <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">分辨率</label>
                 <div className="flex flex-wrap gap-1.5">
-                  {['480p', '720p', '1080p'].map((r) => (
+                  {videoCapResolutions.map((r) => (
                     <button
                       key={r}
                       onClick={() => setVideoResolution(r)}
@@ -679,7 +713,7 @@ export default function StudioPage() {
               <div>
                 <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">画面比例</label>
                 <div className="flex flex-wrap gap-1.5">
-                  {['16:9', '9:16', '1:1', '4:3', '3:4'].map((r) => (
+                  {videoCapRatios.map((r) => (
                     <button
                       key={r}
                       onClick={() => setVideoRatio(r)}
@@ -701,8 +735,8 @@ export default function StudioPage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="range"
-                    min={5}
-                    max={10}
+                    min={videoCapDurations[0] ?? 5}
+                    max={videoCapDurations[videoCapDurations.length - 1] ?? 10}
                     step={1}
                     value={videoDuration}
                     onChange={(e) => setVideoDuration(Number(e.target.value))}
@@ -739,8 +773,8 @@ export default function StudioPage() {
           {/* Quota info */}
           {quota && (
             <div className="flex items-center justify-between text-[10px] text-[var(--color-text-subtle)]">
-              <span>今日 {quota.daily_used}/{quota.daily_limit}</span>
-              <span>本月 {quota.monthly_used}/{quota.monthly_limit}</span>
+              <span>今日 {mediaMode === 'image' ? `${quota.daily_image_used ?? quota.daily_used}/${quota.daily_image_limit ?? quota.daily_limit}` : `${quota.daily_video_used ?? quota.daily_used}/${quota.daily_video_limit ?? quota.daily_limit}`}</span>
+              <span>本月 {mediaMode === 'image' ? `${quota.monthly_image_used ?? quota.monthly_used}/${quota.monthly_image_limit ?? quota.monthly_limit}` : `${quota.monthly_video_used ?? quota.monthly_used}/${quota.monthly_video_limit ?? quota.monthly_limit}`}</span>
             </div>
           )}
 

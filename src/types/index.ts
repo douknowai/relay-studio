@@ -6,7 +6,7 @@ export type MediaType = 'image' | 'video';
 export type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type RequestSource = 'web' | 'api' | 'admin_retry';
 
-export type ProviderType = 'coze_coding' | 'coze_workflow' | 'mock';
+export type ProviderType = 'coze_coding' | 'coze_coding_video' | 'coze_workflow' | 'mock';
 
 export interface Profile {
   id: string;
@@ -26,8 +26,11 @@ export interface UserQuota {
   user_id: string;
   daily_image_limit: number;
   monthly_image_limit: number;
+  daily_video_limit: number;
+  monthly_video_limit: number;
   max_concurrent_tasks: number;
   max_images_per_request: number;
+  max_videos_per_request: number;
   api_access_enabled: boolean;
   allowed_model_codes: string[];
   allowed_sizes: string[];
@@ -57,9 +60,51 @@ export interface ModelConfig {
   max_provider_concurrency: number;
   timeout_seconds: number;
   default_parameters: Record<string, unknown>;
-  capability_metadata: Record<string, unknown>;
+  capability_metadata: ImageCapabilityMetadata | VideoCapabilityMetadata | Record<string, unknown>;
   created_at: string;
   updated_at: string;
+}
+
+export interface ImageCapabilityMetadata {
+  media_type?: 'image';
+  description?: string;
+  supported_sizes?: string[];
+  max_images_per_request?: number;
+  default_size?: string;
+  [key: string]: unknown;
+}
+
+export interface VideoCapabilityMetadata {
+  media_type: 'video';
+  description?: string;
+  supports_text_to_video?: boolean;
+  supports_image_to_video?: boolean;
+  supports_multiple_references?: boolean;
+  supports_reference_video?: boolean;
+  supports_reference_audio?: boolean;
+  supported_resolutions?: string[];
+  supported_ratios?: string[];
+  supported_durations?: number[];
+  max_videos_per_request?: number;
+  default_resolution?: string;
+  default_ratio?: string;
+  default_duration?: number;
+  [key: string]: unknown;
+}
+
+export interface QuotaInfo {
+  daily_used: number;
+  daily_limit: number;
+  monthly_used: number;
+  monthly_limit: number;
+  daily_image_used: number;
+  daily_image_limit: number;
+  monthly_image_used: number;
+  monthly_image_limit: number;
+  daily_video_used: number;
+  daily_video_limit: number;
+  monthly_video_used: number;
+  monthly_video_limit: number;
 }
 
 export interface GenerationTask {

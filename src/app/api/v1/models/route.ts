@@ -37,19 +37,39 @@ export async function GET(request: NextRequest) {
 
     if (isApiKeyAuth) {
       // Return OpenAI-compatible format
-      const openaiModels = models.map((m: Record<string, unknown>) => ({
-        id: m.code,
-        object: 'model' as const,
-        created: Math.floor(new Date(m.created_at as string).getTime() / 1000),
-        owned_by: 'image-relay-studio',
-        // Extended fields for our platform
-        display_name: m.display_name,
-        provider_type: m.provider_type,
-        supports_text_to_image: m.supports_text_to_image,
-        supports_image_to_image: m.supports_image_to_image,
-        supported_sizes: m.supported_sizes,
-        max_images_per_request: m.max_images_per_request,
-      }));
+      const openaiModels = models.map((m: Record<string, unknown>) => {
+        const meta = (m.capability_metadata as Record<string, unknown>) || {};
+        const isVideo = (m.provider_type as string)?.includes('video');
+        return {
+          id: m.code,
+          object: 'model' as const,
+          created: Math.floor(new Date(m.created_at as string).getTime() / 1000),
+          owned_by: 'relay-studio',
+          // Extended fields for our platform
+          display_name: m.display_name,
+          provider_type: m.provider_type,
+          type: isVideo ? 'video' : 'image',
+          // Image fields
+          supports_text_to_image: m.supports_text_to_image || false,
+          supports_image_to_image: m.supports_image_to_image || false,
+          supported_sizes: m.supported_sizes || [],
+          max_images_per_request: m.max_images_per_request || 0,
+          // Video fields (read from DB columns first, fallback to capability_metadata)
+          supports_text_to_video: m.supports_text_to_video || meta.supports_text_to_video || false,
+          supports_image_to_video: m.supports_image_to_video || meta.supports_image_to_video || false,
+          supports_reference_video: meta.supports_reference_video || false,
+          supports_reference_audio: meta.supports_reference_audio || false,
+          supported_resolutions: meta.supported_resolutions || [],
+          supported_ratios: meta.supported_ratios || [],
+          supported_durations: meta.supported_durations || [],
+          max_videos_per_request: meta.max_videos_per_request || 0,
+          default_resolution: meta.default_resolution || null,
+          default_ratio: meta.default_ratio || null,
+          default_duration: meta.default_duration || null,
+          // Common
+          description: meta.description || '',
+        };
+      });
       return NextResponse.json({
         object: 'list',
         data: openaiModels,

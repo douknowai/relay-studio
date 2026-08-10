@@ -1,4 +1,4 @@
--- Seed data for Image Relay Studio
+-- Seed data for Relay Studio
 -- Run this after migrations to set up default system settings and model configs
 
 -- ============================================
@@ -41,6 +41,43 @@ INSERT INTO model_configs (code, display_name, provider_type, external_model_id,
 ('image-mock', 'Mock Provider', 'mock', 'mock-model', false, 99,
   true, true, true, true, true,
   '["512x512","1024x1024","1024x1792","1792x1024"]', 4, 100, 30,
-  '{}', '{"description": "本地开发和测试用 Mock 模型"}')
+  '{}', '{"description": "本地开发和测试用 Mock 模型"}'),
+
+-- Video models (Seedance by Doubao/ByteDance via Coze)
+('video-seedance-1.5-pro', 'Seedance 1.5 Pro', 'coze_coding_video', 'doubao-seedance-1-5-pro-251215', true, 10,
+  false, false, false, false, false,
+  '[]', 1, 5, 600,
+  '{}', '{
+    "description": "高质量视频生成模型，支持文生视频和图生视频",
+    "supports_text_to_video": true,
+    "supports_image_to_video": true,
+    "supports_multiple_references": true,
+    "supported_resolutions": ["480p", "720p", "1080p"],
+    "supported_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    "supported_durations": [5, 10],
+    "max_videos_per_request": 1,
+    "default_resolution": "720p",
+    "default_ratio": "16:9",
+    "default_duration": 5
+  }'),
+
+('video-seedance-2.0', 'Seedance 2.0', 'coze_coding_video', 'doubao-seedance-2-0-pro-250428', true, 11,
+  false, false, false, false, false,
+  '[]', 1, 3, 600,
+  '{}', '{
+    "description": "新一代视频生成模型，支持参考视频和参考音频输入",
+    "supports_text_to_video": true,
+    "supports_image_to_video": true,
+    "supports_multiple_references": true,
+    "supports_reference_video": true,
+    "supports_reference_audio": true,
+    "supported_resolutions": ["480p", "720p", "1080p"],
+    "supported_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    "supported_durations": [5, 10],
+    "max_videos_per_request": 1,
+    "default_resolution": "720p",
+    "default_ratio": "16:9",
+    "default_duration": 5
+  }')
 
 ON CONFLICT DO NOTHING;

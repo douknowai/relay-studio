@@ -7,8 +7,11 @@ import { getQuotaUsage } from '@/server/quotas';
 const QUOTA_FIELDS = [
   'daily_image_limit',
   'monthly_image_limit',
+  'daily_video_limit',
+  'monthly_video_limit',
   'max_concurrent_tasks',
   'max_images_per_request',
+  'max_videos_per_request',
   'api_access_enabled',
   'allowed_model_codes',
   'allowed_sizes',

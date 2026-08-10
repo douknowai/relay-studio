@@ -140,9 +140,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Validate resolution against model supported_sizes
-    if (modelConfig.supported_sizes && (modelConfig.supported_sizes as string[]).length > 0) {
-      if (!(modelConfig.supported_sizes as string[]).includes(resolution)) {
+    // 5. Validate resolution against model supported_sizes or capability_metadata.supported_resolutions
+    const supportedResolutions =
+      (modelConfig.supported_sizes as string[] | null)?.length
+        ? (modelConfig.supported_sizes as string[])
+        : (modelConfig.capability_metadata as Record<string, unknown>)?.supported_resolutions as string[] | undefined;
+    if (supportedResolutions && supportedResolutions.length > 0) {
+      if (!supportedResolutions.includes(resolution)) {
         throw new AppError(ErrorCodes.INVALID_REQUEST, '模型不支持此分辨率');
       }
     }
