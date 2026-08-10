@@ -92,6 +92,11 @@ secrets.*
 /scripts/local/
 /.preview
 
+# 内部开发文档与 AI 开发指令（避免内部架构、进度、设计规范泄露）
+/docs/
+AGENTS.md
+DESIGN.md
+
 # 日志、进程与临时文件
 *.log
 *.log.*

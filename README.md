@@ -1,6 +1,6 @@
-# Image Relay Studio
+# Relay Studio
 
-面向白名单用户的内部 AI 图像生成工作台。项目通过 Provider 适配层封装扣子官方图像生成能力，同时提供 Web 控制台和 OpenAI Images API 兼容接口。
+面向白名单用户的内部 AI 媒体生成工作台。通过 Provider 适配层统一封装扣子官方的图像与视频生成能力，提供 Web 控制台和 OpenAI 兼容 API。
 
 ![status](https://img.shields.io/badge/status-internal%20use-orange)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
@@ -10,12 +10,13 @@
 
 ## 核心能力
 
-- 图像工作台：文生图、参考图编辑、模型与尺寸选择、任务记录和图片库。
-- OpenAI 兼容 API：支持 `/api/v1/models` 和 `/api/v1/images/generations`。
-- 统一任务系统：状态迁移、取消、重试和 Provider 并发领取均由数据库原子操作约束。
-- 额度与权限：日/月额度、并发限制、模型白名单和细粒度 API Key Scope。
-- 管理后台：用户、任务、资产、模型、系统设置、审计日志和健康状态。
-- 安全基线：Supabase Auth、行级安全策略（Row Level Security，RLS）、服务端密钥、短时签名 URL、结构化日志脱敏、内容审核与安全响应头。
+- **图像工作台**：文生图、参考图编辑、模型与尺寸选择、任务记录和图片库。
+- **视频工作台**：文生视频、图生视频、首尾帧生成，异步任务管理、视频库与在线预览。
+- **OpenAI 兼容 API**：`/api/v1/images/generations`（同步）和 `/api/v1/videos`（异步），支持 `base_url` 直接对接。
+- **统一任务系统**：状态迁移、取消、重试和 Provider 并发领取均由数据库原子操作约束。
+- **额度与权限**：日/月额度、并发限制、模型白名单和细粒度 API Key Scope。
+- **管理后台**：用户、任务、资产、模型、系统设置、审计日志和健康状态。
+- **安全基线**：Supabase Auth、行级安全策略（RLS）、服务端密钥、短时签名 URL、结构化日志脱敏、内容审核与安全响应头。
 
 ## 技术栈
 
@@ -27,7 +28,8 @@
 | 数据库 | PostgreSQL、Supabase、Drizzle ORM |
 | 认证 | Supabase Auth；Web Session 与内部 API Key |
 | 存储 | S3 兼容对象存储 |
-| 图像 Provider | `coze-coding-dev-sdk` |
+| 图像 Provider | `coze-coding-dev-sdk` ImageGenerationClient |
+| 视频 Provider | `coze-coding-dev-sdk` VideoGenerationClient（Seedance） |
 | 校验与测试 | Zod 4、Node Test Runner、ESLint |
 | 包管理器 | pnpm 9+ |
 
@@ -41,19 +43,23 @@
 │   ├── app/
 │   │   ├── (auth)/           # 登录等公开认证页面
 │   │   ├── (app)/            # 登录后的工作台与管理后台
+│   │   │   ├── studio/       # 生图工作台
+│   │   │   ├── videos/       # 视频库
+│   │   │   ├── gallery/      # 图片库
+│   │   │   ├── tasks/        # 任务列表
+│   │   │   └── admin/        # 管理后台
 │   │   └── api/              # 健康、认证、v1 与 admin API
 │   ├── components/           # 通用 UI 与布局组件
 │   ├── hooks/                # React Hooks
 │   ├── lib/                  # 浏览器端基础设施
 │   ├── server/               # 认证、任务、额度、Provider、存储等服务端逻辑
+│   │   └── providers/        # 图像与视频 Provider 适配层
 │   ├── storage/database/     # Supabase 客户端与 Drizzle Schema
 │   └── proxy.ts              # CSP、CORS 与其他安全响应头
 ├── supabase/
 │   ├── migrations/           # 按编号追加的数据库迁移
 │   └── seed.sql              # 初始模型与系统数据
-├── tests/                    # 不依赖生产服务的自动化测试
-├── docs/                     # 架构、API、安全和运维文档
-└── assets/                   # 本地调试素材；已忽略，不参与发布
+└── tests/                    # 不依赖生产服务的自动化测试
 ```
 
 新增代码应放在职责对应的目录中。可发布资源放入 `public/`；个人素材、临时脚本、IDE 和 AI 开发工具配置不得进入版本库。
@@ -67,7 +73,7 @@
 - Bash 环境；Windows 可使用 Git Bash 或 WSL
 - Supabase 项目
 - S3 兼容对象存储
-- 可用的扣子图像生成运行环境
+- 可用的扣子图像与视频生成运行环境
 
 ### 1. 安装依赖
 
@@ -155,12 +161,27 @@ pnpm build
 
 ## OpenAI 兼容 API
 
+`/api/v1/` 下的接口兼容 OpenAI API 格式，支持 `base_url` 指向本服务。
+
 ### 认证
 
 - API Key：`Authorization: Bearer <your-internal-api-key>`
 - Web Session：`x-session: <supabase-access-token>`
 
-API Key 可按资源授予 `images:*`、`tasks:*`、`models:read`、`usage:read`、`api_keys:*` 和 `profile:*` Scope。明文 Key 仅在创建时返回一次。
+API Key 可按资源授予 `images:*`、`videos:*`、`tasks:*`、`models:read`、`usage:read`、`api_keys:*` 和 `profile:*` Scope。明文 Key 仅在创建时返回一次。
+
+### 接口列表
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/models` | GET | 列出可用模型 |
+| `/api/v1/images/generations` | POST | 同步生成图片，兼容 OpenAI Images API |
+| `/api/v1/videos` | POST | 异步生成视频（文生/图生/首尾帧），返回 task_id |
+| `/api/v1/videos` | GET | 列出当前用户视频资产 |
+| `/api/v1/videos/[video_id]` | GET | 获取视频详情（含签名 URL） |
+| `/api/v1/tasks` | GET | 列出任务 |
+| `/api/v1/tasks/[task_id]` | GET | 获取任务详情 |
+| `/api/v1/usage` | GET | 查询使用量 |
 
 ### Python 示例
 
@@ -172,14 +193,14 @@ client = OpenAI(
     base_url="https://your-host/api/v1",
 )
 
-response = client.images.generate(
+# 图像生成（同步）
+image = client.images.generate(
     model="image-pro",
     prompt="a cat sitting on a windowsill",
     n=1,
     size="1024x1024",
 )
-
-print(response.data[0].url)
+print(image.data[0].url)
 ```
 
 ### 图像生成请求
@@ -202,6 +223,28 @@ Content-Type: application/json
 
 `n` 支持 1–4，最终上限还受用户额度和模型配置约束。`size` 同时接受原生尺寸与 `1024x1024` 等 OpenAI 格式。`response_format` 支持 `url` 和 `b64_json`。
 
+### 视频生成请求
+
+视频生成为异步流程：提交后返回 `task_id`，通过轮询任务或视频详情接口获取结果。
+
+```http
+POST /api/v1/videos
+Authorization: Bearer <your-internal-api-key>
+Content-Type: application/json
+```
+
+```json
+{
+  "model": "seedance",
+  "prompt": "a drone shot flying over a snowy mountain range at sunrise",
+  "type": "text_to_video",
+  "duration": 5,
+  "aspect_ratio": "16:9"
+}
+```
+
+图生视频和首尾帧模式额外接受 `image_url` / `first_frame_url` / `last_frame_url` 参数。
+
 ## 数据与安全
 
 - 服务端 Provider 凭据和 Supabase Service Role Key 不会发送到浏览器。
@@ -213,8 +256,6 @@ Content-Type: application/json
 - 生成接口当前使用进程内限流。多实例部署时应在网关或共享存储层补充全局限流。
 - 远程资源抓取包含协议、私网地址、大小和超时限制；生产环境仍建议配置网络出口白名单。
 - 管理员初始化完成后应轮换或移除 Bootstrap 凭据。
-
-如果发现安全问题，请不要创建公开 Issue，按 [安全披露说明](./docs/security.md) 私下报告。
 
 ## 发布顺序
 
@@ -232,20 +273,9 @@ Content-Type: application/json
 - 仅使用 pnpm，不使用 npm 或 Yarn 安装依赖。
 - 提交信息采用 Conventional Commits，例如 `fix: prevent duplicate task execution`。
 - 数据库迁移只追加新文件，不修改已经发布的迁移。
-- 修复缺陷时优先增加可复现测试；行为变更需同步更新 README 或 `docs/`。
+- 修复缺陷时优先增加可复现测试；行为变更需同步更新 README。
 - 提交前检查 `git status`，确保 `.env*`、本地工具配置、调试素材和构建产物未被暂存。
-
-## 进一步阅读
-
-- [架构说明](./docs/architecture.md)
-- [API 参考](./docs/api-reference.md)
-- [数据库说明](./docs/database.md)
-- [安全模型](./docs/security.md)
-- [管理员指南](./docs/admin-guide.md)
-- [Provider 集成](./docs/provider-integration.md)
-- [合规边界](./docs/compliance-boundaries.md)
-- [故障排查](./docs/troubleshooting.md)
 
 ## License
 
-[MIT](./LICENSE) © TechDou
+[MIT](./LICENSE)
