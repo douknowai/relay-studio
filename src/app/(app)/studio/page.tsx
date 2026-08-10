@@ -29,6 +29,21 @@ interface GeneratedVideo {
   duration?: number;
 }
 
+async function downloadFile(url: string, filename: string) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    link.click();
+    window.URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.open(url, '_blank');
+  }
+}
+
 export default function StudioPage() {
   const { profile, session } = useAuth();
   const [prompt, setPrompt] = useState('');
@@ -751,12 +766,12 @@ export default function StudioPage() {
           </button>
 
           {/* Mobile: View results button */}
-          {generatedImages.length > 0 && (
+          {(generatedImages.length > 0 || generatedVideos.length > 0) && (
             <button
               onClick={() => setMobileView('results')}
               className="md:hidden w-full py-2 text-xs text-[var(--color-accent)] text-center"
             >
-              查看生成结果 ({generatedImages.length}) →
+              查看生成结果 ({mediaMode === 'image' ? generatedImages.length : generatedVideos.length}) →
             </button>
           )}
         </div>
@@ -819,13 +834,12 @@ export default function StudioPage() {
                   />
                   <div className="flex items-center justify-between px-3 py-2 bg-[var(--color-surface)] border-t border-[var(--color-border)]">
                     <span className="text-[10px] text-[var(--color-text-subtle)]">AI 生成视频</span>
-                    <a
-                      href={video.url}
-                      download
+                    <button
+                      onClick={() => downloadFile(video.url, `video-${video.id}.mp4`)}
                       className="px-2.5 py-1 text-xs bg-[var(--color-text)] text-white rounded-[var(--radius-sm)] hover:opacity-80 tap-target"
                     >
                       下载
-                    </a>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -845,13 +859,12 @@ export default function StudioPage() {
                   {/* Mobile: always show actions, Desktop: hover only */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100">
                     <div className="flex gap-2">
-                      <a
-                        href={img.url}
-                        download
+                      <button
+                        onClick={() => downloadFile(img.url, `image-${img.id}.png`)}
                         className="px-3 py-1.5 md:px-2.5 md:py-1 text-xs bg-white text-[var(--color-text)] rounded-[var(--radius-sm)] hover:bg-gray-100 tap-target"
                       >
                         下载
-                      </a>
+                      </button>
                       <button
                         onClick={() => toggleFavorite(img.id, img.favorite)}
                         className={`px-3 py-1.5 md:px-2.5 md:py-1 text-xs rounded-[var(--radius-sm)] tap-target ${
