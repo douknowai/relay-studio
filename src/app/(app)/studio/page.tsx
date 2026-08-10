@@ -22,12 +22,19 @@ interface GeneratedImage {
   favorite: boolean;
 }
 
+interface GeneratedVideo {
+  id: string;
+  url: string;
+  thumbnail_url?: string;
+  duration?: number;
+}
+
 export default function StudioPage() {
   const { profile, session } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [selectedModelCode, setSelectedModelCode] = useState<string>('');
-  const [taskType, setTaskType] = useState<'text_to_image' | 'image_to_image'>('text_to_image');
+  const [taskType, setTaskType] = useState<'text_to_image' | 'image_to_image' | 'text_to_video' | 'image_to_video' | 'first_last_frame'>('text_to_image');
   const [size, setSize] = useState('2K');
   const [imageCount, setImageCount] = useState(1);
   const [visibleWatermark, setVisibleWatermark] = useState(false);
@@ -38,11 +45,26 @@ export default function StudioPage() {
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [generatedVideos, setGeneratedVideos] = useState<GeneratedVideo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [generationEnabled, setGenerationEnabled] = useState(true);
   const [modelsLoading, setModelsLoading] = useState(true);
   // Mobile: control whether to show control panel or results
   const [mobileView, setMobileView] = useState<'control' | 'results'>('control');
+
+  // Media mode: image or video generation
+  const [mediaMode, setMediaMode] = useState<'image' | 'video'>('image');
+  const [videoTaskType, setVideoTaskType] = useState<'text_to_video' | 'image_to_video' | 'first_last_frame'>('text_to_video');
+  const [videoDuration, setVideoDuration] = useState(5);
+  const [videoResolution, setVideoResolution] = useState('720p');
+  const [videoRatio, setVideoRatio] = useState('16:9');
+  // Video first/last frame reference files
+  const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
+  const [firstFramePreview, setFirstFramePreview] = useState<string | null>(null);
+  const [firstFrameAssetId, setFirstFrameAssetId] = useState<string | null>(null);
+  const [lastFrameFile, setLastFrameFile] = useState<File | null>(null);
+  const [lastFramePreview, setLastFramePreview] = useState<string | null>(null);
+  const [lastFrameAssetId, setLastFrameAssetId] = useState<string | null>(null);
 
   const selectedModel = models.find(m => m.code === selectedModelCode);
 
@@ -57,7 +79,12 @@ export default function StudioPage() {
         });
         if (res.ok && !cancelled) {
           const data = await res.json();
-          const enabledModels = (data.data || []).filter((m: ModelConfig) => m.enabled);
+          const enabledModels = (data.data || []).filter((m: ModelConfig) => {
+            if (!m.enabled) return false;
+            const meta = m.capability_metadata as Record<string, unknown> | null;
+            const modelMediaType = meta?.media_type as string | undefined;
+            return modelMediaType === mediaMode || (mediaMode === 'image' && !modelMediaType);
+          });
           setModels(enabledModels);
           if (enabledModels.length > 0) {
             setSelectedModelCode((prev) => {
@@ -79,7 +106,7 @@ export default function StudioPage() {
     }
     fetchModels();
     return () => { cancelled = true; };
-  }, [session]);
+  }, [session, mediaMode]);
 
   // Fetch quota
   useEffect(() => {
@@ -125,18 +152,34 @@ export default function StudioPage() {
         setTaskStatus(data.data?.status);
 
         if (data.data?.status === 'succeeded') {
-          const imagesRes = await fetchWithTimeout(`/api/v1/images?task_id=${currentTaskId}`, {
-            headers: { 'x-session': session?.access_token || '' },
-            timeout: 8_000,
-          });
-          if (imagesRes.ok) {
-            const imagesData = await imagesRes.json();
-            setGeneratedImages((imagesData.data || []).map((img: GeneratedImage) => ({
-              id: img.id,
-              url: img.url,
-              thumbnail_url: img.thumbnail_url,
-              favorite: img.favorite ?? false,
-            })));
+          if (mediaMode === 'video') {
+            const videosRes = await fetchWithTimeout(`/api/v1/videos?task_id=${currentTaskId}`, {
+              headers: { 'x-session': session?.access_token || '' },
+              timeout: 8_000,
+            });
+            if (videosRes.ok) {
+              const videosData = await videosRes.json();
+              setGeneratedVideos((videosData.data || []).map((vid: GeneratedVideo) => ({
+                id: vid.id,
+                url: vid.url,
+                thumbnail_url: vid.thumbnail_url,
+                duration: vid.duration,
+              })));
+            }
+          } else {
+            const imagesRes = await fetchWithTimeout(`/api/v1/images?task_id=${currentTaskId}`, {
+              headers: { 'x-session': session?.access_token || '' },
+              timeout: 8_000,
+            });
+            if (imagesRes.ok) {
+              const imagesData = await imagesRes.json();
+              setGeneratedImages((imagesData.data || []).map((img: GeneratedImage) => ({
+                id: img.id,
+                url: img.url,
+                thumbnail_url: img.thumbnail_url,
+                favorite: img.favorite ?? false,
+              })));
+            }
           }
           setIsGenerating(false);
           // Switch to results view on mobile when generation completes
@@ -154,7 +197,7 @@ export default function StudioPage() {
       // 单次轮询失败：忽略，下一轮重试
     }
     return false; // 任务未完成，继续轮询
-  }, [currentTaskId, session]);
+  }, [currentTaskId, session, mediaMode]);
 
   const scheduleNextPoll = useCallback(() => {
     clearPollTimer();
@@ -212,6 +255,26 @@ export default function StudioPage() {
     setReferencePreviews(previews);
   }, [selectedModel]);
 
+  const uploadReferences = async (): Promise<string[]> => {
+    if (referenceFiles.length === 0) return [];
+    const uploadForms = await Promise.all(
+      referenceFiles.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetchWithTimeout('/api/upload/reference', {
+          method: 'POST',
+          headers: { 'x-session': session?.access_token || '' },
+          body: formData,
+          timeout: 30_000,
+        });
+        if (!res.ok) throw new Error('参考图上传失败');
+        const data = await res.json();
+        return data.data?.asset_id;
+      })
+    );
+    return uploadForms.filter(Boolean);
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim() || !selectedModelCode) return;
     if (!generationEnabled) {
@@ -223,43 +286,42 @@ export default function StudioPage() {
     setError(null);
     setTaskStatus('queued');
     setGeneratedImages([]);
+    setGeneratedVideos([]);
 
     try {
+      let endpoint = '/api/v1/images';
       const body: Record<string, unknown> = {
         model: selectedModelCode,
         prompt: prompt.trim(),
-        size,
-        n: imageCount,
-        visible_watermark: visibleWatermark,
       };
 
-      if (taskType === 'image_to_image' && referenceFiles.length > 0) {
-        const uploadForms = await Promise.all(
-          referenceFiles.map(async (file) => {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetchWithTimeout('/api/upload/reference', {
-              method: 'POST',
-              headers: { 'x-session': session?.access_token || '' },
-              body: formData,
-              timeout: 30_000,
-            });
-            if (!res.ok) throw new Error('参考图上传失败');
-            const data = await res.json();
-            return data.data?.asset_id;
-          })
-        );
-        body.reference_asset_ids = uploadForms.filter(Boolean);
+      if (mediaMode === 'video') {
+        endpoint = '/api/v1/videos';
+        body.resolution = videoResolution;
+        body.ratio = videoRatio;
+        body.duration = videoDuration;
+
+        if (referenceFiles.length > 0) {
+          body.reference_asset_ids = await uploadReferences();
+        }
+      } else {
+        body.size = size;
+        body.n = imageCount;
+        body.visible_watermark = visibleWatermark;
+
+        if (taskType === 'image_to_image' && referenceFiles.length > 0) {
+          body.reference_asset_ids = await uploadReferences();
+        }
       }
 
-      const res = await fetchWithTimeout('/api/v1/images/generations', {
+      const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-session': session?.access_token || '',
         },
         body: JSON.stringify(body),
-        timeout: 15_000,
+        timeout: 30_000,
       });
 
       const data = await res.json();
@@ -351,32 +413,110 @@ export default function StudioPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 md:px-5 py-4 space-y-5">
+          {/* Media Type Switch */}
+          <div>
+            <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">媒体类型</label>
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => {
+                  setMediaMode('image');
+                  setTaskType('text_to_image');
+                  setReferenceFiles([]);
+                  setReferencePreviews([]);
+                  setGeneratedImages([]);
+                  setGeneratedVideos([]);
+                  setError(null);
+                }}
+                className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors tap-target ${
+                  mediaMode === 'image'
+                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                }`}
+              >
+                图片
+              </button>
+              <button
+                onClick={() => {
+                  setMediaMode('video');
+                  setTaskType('text_to_video');
+                  setReferenceFiles([]);
+                  setReferencePreviews([]);
+                  setGeneratedImages([]);
+                  setGeneratedVideos([]);
+                  setError(null);
+                }}
+                className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors tap-target ${
+                  mediaMode === 'video'
+                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                }`}
+              >
+                视频
+              </button>
+            </div>
+          </div>
+
           {/* Generation Mode */}
           <div>
             <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">生成模式</label>
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => setTaskType('text_to_image')}
-                className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors tap-target ${
-                  taskType === 'text_to_image'
-                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
-                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
-                }`}
-              >
-                文生图
-              </button>
-              <button
-                onClick={() => setTaskType('image_to_image')}
-                disabled={!selectedModel?.supports_image_to_image}
-                className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed tap-target ${
-                  taskType === 'image_to_image'
-                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
-                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
-                }`}
-              >
-                图生图
-              </button>
-            </div>
+            {mediaMode === 'image' ? (
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setTaskType('text_to_image')}
+                  className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors tap-target ${
+                    taskType === 'text_to_image'
+                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                  }`}
+                >
+                  文生图
+                </button>
+                <button
+                  onClick={() => setTaskType('image_to_image')}
+                  disabled={!selectedModel?.supports_image_to_image}
+                  className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed tap-target ${
+                    taskType === 'image_to_image'
+                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                  }`}
+                >
+                  图生图
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setTaskType('text_to_video')}
+                  className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors tap-target ${
+                    taskType === 'text_to_video'
+                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                  }`}
+                >
+                  文生视频
+                </button>
+                <button
+                  onClick={() => setTaskType('image_to_video')}
+                  className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors tap-target ${
+                    taskType === 'image_to_video'
+                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                  }`}
+                >
+                  图生视频
+                </button>
+                <button
+                  onClick={() => setTaskType('first_last_frame')}
+                  className={`flex-1 py-2 md:py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors tap-target ${
+                    taskType === 'first_last_frame'
+                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+                  }`}
+                >
+                  首尾帧
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Prompt */}
@@ -388,7 +528,7 @@ export default function StudioPage() {
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="描述你想生成的图片..."
+              placeholder={mediaMode === 'video' ? '描述你想生成的视频画面、动作、镜头运动...' : '描述你想生成的图片...'}
               rows={4}
               className="w-full px-3 py-2 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] resize-none"
             />
@@ -397,11 +537,11 @@ export default function StudioPage() {
             </p>
           </div>
 
-          {/* Reference Images (for image-to-image) */}
-          {taskType === 'image_to_image' && (
+          {/* Reference Images (for image-to-image / image-to-video / first_last_frame) */}
+          {(taskType === 'image_to_image' || taskType === 'image_to_video' || taskType === 'first_last_frame') && (
             <div>
               <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">
-                参考图 {selectedModel?.supports_multiple_references && '(可上传多张)'}
+                {taskType === 'first_last_frame' ? '首帧 + 尾帧（各一张）' : taskType === 'image_to_video' ? '参考图' : `参考图 ${selectedModel?.supports_multiple_references ? '(可上传多张)' : '(单张)'}`}
               </label>
               <div className="flex gap-2 flex-wrap">
                 {referencePreviews.map((preview, i) => (
@@ -425,7 +565,7 @@ export default function StudioPage() {
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
-                    multiple={selectedModel?.supports_multiple_references}
+                    multiple={taskType === 'first_last_frame' ? true : !!selectedModel?.supports_multiple_references}
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -458,46 +598,109 @@ export default function StudioPage() {
             )}
           </div>
 
-          {/* Size */}
-          <div>
-            <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">尺寸</label>
-            <div className="flex flex-wrap gap-1.5">
-              {availableSizes.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSize(s)}
-                  className={`px-3 py-1.5 md:py-1 text-xs rounded-[var(--radius-sm)] transition-colors tap-target ${
-                    size === s
-                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium'
-                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]'
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Size / Video Params */}
+          {mediaMode === 'image' ? (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">尺寸</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableSizes.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSize(s)}
+                      className={`px-3 py-1.5 md:py-1 text-xs rounded-[var(--radius-sm)] transition-colors tap-target ${
+                        size === s
+                          ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium'
+                          : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Image Count */}
-          <div>
-            <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">
-              生成数量
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={1}
-                max={maxN}
-                value={imageCount}
-                onChange={(e) => setImageCount(Number(e.target.value))}
-                className="flex-1"
-              />
-              <span className="text-xs text-[var(--color-text)] w-6 text-center">{imageCount}</span>
-            </div>
-          </div>
+              {/* Image Count */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">
+                  生成数量
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={1}
+                    max={maxN}
+                    value={imageCount}
+                    onChange={(e) => setImageCount(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-[var(--color-text)] w-6 text-center">{imageCount}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Video Resolution */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">分辨率</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {['480p', '720p', '1080p'].map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setVideoResolution(r)}
+                      className={`px-3 py-1.5 md:py-1 text-xs rounded-[var(--radius-sm)] transition-colors tap-target ${
+                        videoResolution === r
+                          ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium'
+                          : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Video Aspect Ratio */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">画面比例</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {['16:9', '9:16', '1:1', '4:3', '3:4'].map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setVideoRatio(r)}
+                      className={`px-3 py-1.5 md:py-1 text-xs rounded-[var(--radius-sm)] transition-colors tap-target ${
+                        videoRatio === r
+                          ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium'
+                          : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Video Duration */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">时长（秒）</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={5}
+                    max={10}
+                    step={1}
+                    value={videoDuration}
+                    onChange={(e) => setVideoDuration(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-[var(--color-text)] w-8 text-center">{videoDuration}s</span>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Watermark */}
-          {selectedModel?.supports_visible_watermark_control && (
+          {mediaMode === 'image' && selectedModel?.supports_visible_watermark_control && (
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-[var(--color-text-muted)]">关闭可见水印</label>
               <button
@@ -590,22 +793,46 @@ export default function StudioPage() {
             </div>
           )}
 
-          {isGenerating && !generatedImages.length && (
+          {isGenerating && !generatedImages.length && !generatedVideos.length && (
             <div className="flex flex-col items-center justify-center py-20">
               <div className="w-10 h-10 border-2 border-[var(--color-accent)]/30 border-t-[var(--color-accent)] rounded-full animate-spin mb-4" />
               <p className="text-sm text-[var(--color-text-muted)]">
-                {taskStatus === 'queued' ? '任务排队中...' : '正在生成图片...'}
+                {taskStatus === 'queued' ? '任务排队中...' : mediaMode === 'video' ? '正在生成视频...' : '正在生成图片...'}
               </p>
             </div>
           )}
 
-          {!isGenerating && !error && !generatedImages.length && (
+          {!isGenerating && !error && !generatedImages.length && !generatedVideos.length && (
             <div className="flex flex-col items-center justify-center py-20">
               <p className="text-sm text-[var(--color-text-subtle)]">输入 Prompt 并点击生成</p>
             </div>
           )}
 
-          {generatedImages.length > 0 && (
+          {mediaMode === 'video' && generatedVideos.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
+              {generatedVideos.map((video) => (
+                <div key={video.id} className="group relative rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-black">
+                  <video
+                    src={video.url}
+                    controls
+                    className="w-full aspect-video object-contain"
+                  />
+                  <div className="flex items-center justify-between px-3 py-2 bg-[var(--color-surface)] border-t border-[var(--color-border)]">
+                    <span className="text-[10px] text-[var(--color-text-subtle)]">AI 生成视频</span>
+                    <a
+                      href={video.url}
+                      download
+                      className="px-2.5 py-1 text-xs bg-[var(--color-text)] text-white rounded-[var(--radius-sm)] hover:opacity-80 tap-target"
+                    >
+                      下载
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {mediaMode === 'image' && generatedImages.length > 0 && (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
               {generatedImages.map((img) => (
                 <div key={img.id} className="group relative aspect-square rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">

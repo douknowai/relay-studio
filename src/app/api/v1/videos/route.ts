@@ -164,12 +164,12 @@ export async function POST(request: NextRequest) {
       }
     } else if (reference_asset_ids && reference_asset_ids.length === 1) {
       taskType = 'image_to_video';
-      if (!modelConfig.supports_image_to_image) {
+      if (!modelConfig.supports_image_to_video) {
         throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持图生视频');
       }
     } else {
       taskType = 'text_to_video';
-      if (!modelConfig.supports_text_to_image) {
+      if (!modelConfig.supports_text_to_video) {
         throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持文生视频');
       }
     }

@@ -87,6 +87,8 @@ export const modelConfigs = pgTable(
     sort_order: integer("sort_order").notNull().default(0),
     supports_text_to_image: boolean("supports_text_to_image").notNull().default(true),
     supports_image_to_image: boolean("supports_image_to_image").notNull().default(false),
+    supports_text_to_video: boolean("supports_text_to_video").notNull().default(false),
+    supports_image_to_video: boolean("supports_image_to_video").notNull().default(false),
     supports_multiple_references: boolean("supports_multiple_references").notNull().default(false),
     supports_sequential_generation: boolean("supports_sequential_generation").notNull().default(false),
     supports_visible_watermark_control: boolean("supports_visible_watermark_control").notNull().default(false),

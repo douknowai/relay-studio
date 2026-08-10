@@ -47,6 +47,8 @@ export interface ModelConfig {
   sort_order: number;
   supports_text_to_image: boolean;
   supports_image_to_image: boolean;
+  supports_text_to_video: boolean;
+  supports_image_to_video: boolean;
   supports_multiple_references: boolean;
   supports_sequential_generation: boolean;
   supports_visible_watermark_control: boolean;
