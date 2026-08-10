@@ -40,8 +40,12 @@ export function proxy(request: NextRequest) {
   // ── Content Security Policy ────────────────────────────────────────
   // 从构建期 env 读取受信外部源（NEXT_PUBLIC_* 会被内联到运行时代码，proxy 在
   // Node 运行时也可以读到）。未配置时 fallback 到 'self'。
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const storageHost = process.env.NEXT_PUBLIC_STORAGE_HOST?.trim();
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+    process.env.COZE_SUPABASE_URL?.trim();
+  const storageHost =
+    process.env.NEXT_PUBLIC_STORAGE_HOST?.trim() ||
+    process.env.COZE_BUCKET_ENDPOINT_URL?.trim();
 
   const connectSources = [
     "'self'",
