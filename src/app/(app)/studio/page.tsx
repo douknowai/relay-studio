@@ -703,7 +703,7 @@ export default function StudioPage() {
                           : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]'
                       }`}
                     >
-                      {r}
+                      {r === 'adaptive' ? '自动' : r}
                     </button>
                   ))}
                 </div>
@@ -731,18 +731,22 @@ export default function StudioPage() {
 
               {/* Video Duration */}
               <div>
-                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">时长（秒）</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={videoCapDurations[0] ?? 5}
-                    max={videoCapDurations[videoCapDurations.length - 1] ?? 10}
-                    step={1}
-                    value={videoDuration}
-                    onChange={(e) => setVideoDuration(Number(e.target.value))}
-                    className="flex-1"
-                  />
-                  <span className="text-xs text-[var(--color-text)] w-8 text-center">{videoDuration}s</span>
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">时长</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {videoCapDurations.map((d: number) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setVideoDuration(d)}
+                      className={`px-2.5 py-1 text-xs rounded-[var(--radius-sm)] border transition-colors ${
+                        videoDuration === d
+                          ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+                          : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-accent)]'
+                      }`}
+                    >
+                      {d === -1 ? '自动' : `${d}s`}
+                    </button>
+                  ))}
                 </div>
               </div>
             </>
