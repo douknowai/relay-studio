@@ -38,8 +38,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="p-6 md:p-8 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)]">
           <div className="text-center mb-6">
-            <h1 className="text-lg font-semibold text-[var(--color-text)]">Image Relay Studio</h1>
-            <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">AI 图像生成工作台</p>
+            <h1 className="text-lg font-semibold text-[var(--color-text)]">Relay Studio</h1>
+            <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">AI 媒体生成工作台</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

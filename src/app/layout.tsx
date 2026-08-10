@@ -6,8 +6,8 @@ import { ResourcePreconnect } from '@/components/resource-preconnect';
 import { Toaster } from '@/components/ui/sonner';
 
 export const metadata: Metadata = {
-  title: 'Image Relay Studio',
-  description: 'AI 图像生成工作台',
+  title: 'Relay Studio',
+  description: 'AI 媒体生成工作台',
 };
 
 export const viewport: Viewport = {
