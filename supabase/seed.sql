@@ -30,12 +30,12 @@ INSERT INTO model_configs (code, display_name, provider_type, external_model_id,
 
 ('image-pro', 'Image Pro', 'coze_coding', '', true, 1,
   true, true, false, false, false,
-  '["1024x1024","1024x1792","1792x1024"]', 4, 5, 120,
+  '["2K","4K","2560x1440","2048x2048","3840x2160","4096x4096"]', 4, 5, 120,
   '{}', '{"description": "高质量图像生成模型"}'),
 
 ('image-standard', 'Image Standard', 'coze_coding', '', true, 2,
   true, false, false, false, false,
-  '["1024x1024"]', 4, 10, 90,
+  '["2K","4K","1024x1024"]', 4, 10, 90,
   '{}', '{"description": "标准图像生成模型"}'),
 
 ('image-mock', 'Mock Provider', 'mock', 'mock-model', false, 99,
