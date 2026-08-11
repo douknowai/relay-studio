@@ -501,6 +501,10 @@ async function executeVideoTask(
       }
     }
 
+    // Extract reference video/audio URLs from request parameters
+    const referenceVideoUrls = (params.reference_videos as string[]) || [];
+    const referenceAudioUrls = (params.reference_audios as string[]) || [];
+
     const providerRequest: VideoProviderRequest = {
       prompt: task.prompt,
       model_id: (modelConfig.external_model_id as string) || '',
@@ -512,6 +516,8 @@ async function executeVideoTask(
       generate_audio: generateAudio,
       reference_image_urls: referenceUrls.length > 0 ? referenceUrls : undefined,
       reference_image_roles: roles.length > 0 ? roles : undefined,
+      reference_video_urls: referenceVideoUrls.length > 0 ? referenceVideoUrls : undefined,
+      reference_audio_urls: referenceAudioUrls.length > 0 ? referenceAudioUrls : undefined,
       custom_headers: customHeaders,
       max_wait_time: modelConfig.timeout_seconds,
     };
