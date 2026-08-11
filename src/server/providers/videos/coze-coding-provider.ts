@@ -47,6 +47,28 @@ export class CozeCodingVideoProvider implements VideoGenerationProvider {
       text: request.prompt,
     });
 
+    // Add reference videos (Seedance 2.0, max 3)
+    if (request.reference_video_urls?.length) {
+      for (const url of request.reference_video_urls) {
+        content.push({
+          type: 'video_url',
+          video_url: { url },
+          role: 'user',
+        });
+      }
+    }
+
+    // Add reference audios (Seedance 2.0, max 3)
+    if (request.reference_audio_urls?.length) {
+      for (const url of request.reference_audio_urls) {
+        content.push({
+          type: 'audio_url',
+          audio_url: { url },
+          role: 'user',
+        });
+      }
+    }
+
     const options: Record<string, unknown> = {};
 
     // Determine model (default to Seedance 1.5 Pro)

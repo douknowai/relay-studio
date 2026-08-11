@@ -36,6 +36,10 @@ export interface VideoProviderRequest {
   reference_image_roles?: ('first_frame' | 'last_frame' | 'reference_image')[];
   custom_headers?: Record<string, string>;
   max_wait_time?: number;
+  /** Signed URLs of reference videos (Seedance 2.0, max 3) */
+  reference_video_urls?: string[];
+  /** Signed URLs of reference audios (Seedance 2.0, max 3) */
+  reference_audio_urls?: string[];
 }
 
 export interface VideoProviderResult {
