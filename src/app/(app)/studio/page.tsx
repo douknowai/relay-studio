@@ -82,6 +82,11 @@ export default function StudioPage() {
   const [videoDuration, setVideoDuration] = useState(5);
   const [videoResolution, setVideoResolution] = useState('720p');
   const [videoRatio, setVideoRatio] = useState('16:9');
+  const [generateAudio, setGenerateAudio] = useState(true);
+  const [referenceVideoUrl, setReferenceVideoUrl] = useState('');
+  const [referenceAudioUrl, setReferenceAudioUrl] = useState('');
+  const [referenceVideoFiles, setReferenceVideoFiles] = useState<File[]>([]);
+  const [referenceAudioFiles, setReferenceAudioFiles] = useState<File[]>([]);
   // Video first/last frame reference files
   const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
   const [firstFramePreview, setFirstFramePreview] = useState<string | null>(null);
@@ -311,6 +316,66 @@ export default function StudioPage() {
     return uploadForms.filter(Boolean);
   };
 
+  const uploadReferenceVideos = async (): Promise<string[]> => {
+    if (referenceVideoFiles.length === 0) return [];
+    const uploadForms = await Promise.all(
+      referenceVideoFiles.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetchWithTimeout('/api/upload/reference', {
+          method: 'POST',
+          headers: { 'x-session': session?.access_token || '' },
+          body: formData,
+          timeout: 60_000,
+        });
+        if (!res.ok) throw new Error('参考视频上传失败');
+        const data = await res.json();
+        return data.data?.asset_id;
+      })
+    );
+    return uploadForms.filter(Boolean);
+  };
+
+  const uploadReferenceAudios = async (): Promise<string[]> => {
+    if (referenceAudioFiles.length === 0) return [];
+    const uploadForms = await Promise.all(
+      referenceAudioFiles.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetchWithTimeout('/api/upload/reference', {
+          method: 'POST',
+          headers: { 'x-session': session?.access_token || '' },
+          body: formData,
+          timeout: 60_000,
+        });
+        if (!res.ok) throw new Error('参考音频上传失败');
+        const data = await res.json();
+        return data.data?.asset_id;
+      })
+    );
+    return uploadForms.filter(Boolean);
+  };
+
+  const handleReferenceVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const maxRefVideos = (selectedModel?.capability_metadata as Record<string, unknown>)?.max_reference_videos as number || 3;
+    const newFiles = Array.from(files).slice(0, maxRefVideos - referenceVideoFiles.length);
+    if (newFiles.length === 0) return;
+    setReferenceVideoFiles(prev => [...prev, ...newFiles]);
+    e.target.value = '';
+  };
+
+  const handleReferenceAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const maxRefAudios = (selectedModel?.capability_metadata as Record<string, unknown>)?.max_reference_audios as number || 3;
+    const newFiles = Array.from(files).slice(0, maxRefAudios - referenceAudioFiles.length);
+    if (newFiles.length === 0) return;
+    setReferenceAudioFiles(prev => [...prev, ...newFiles]);
+    e.target.value = '';
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim() || !selectedModelCode) return;
     if (!generationEnabled) {
@@ -337,8 +402,29 @@ export default function StudioPage() {
         body.ratio = videoRatio;
         body.duration = videoDuration;
 
+        // Auto audio (Seedance 1.5 Pro feature)
+        if (generateAudio) {
+          body.generate_audio = true;
+        }
+
         if (referenceFiles.length > 0) {
           body.reference_asset_ids = await uploadReferences();
+        }
+
+        // Reference videos (Seedance 2.0 feature)
+        if (referenceVideoFiles.length > 0) {
+          const uploadedVideoIds = await uploadReferenceVideos();
+          if (uploadedVideoIds.length > 0) {
+            body.reference_video_asset_ids = uploadedVideoIds;
+          }
+        }
+
+        // Reference audios (Seedance 2.0 feature)
+        if (referenceAudioFiles.length > 0) {
+          const uploadedAudioIds = await uploadReferenceAudios();
+          if (uploadedAudioIds.length > 0) {
+            body.reference_audio_asset_ids = uploadedAudioIds;
+          }
         }
       } else {
         body.size = size;
@@ -768,6 +854,65 @@ export default function StudioPage() {
                   }`}
                 />
               </button>
+            </div>
+          )}
+
+          {/* Video: Auto Audio Toggle (Seedance 1.5 Pro) */}
+          {mediaMode === 'video' && videoMeta?.generate_audio_default !== undefined && !videoMeta?.supports_reference_audio && (
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-[var(--color-text-muted)]">自动生成音频</label>
+              <button
+                onClick={() => setGenerateAudio(!generateAudio)}
+                className={`w-10 h-6 md:w-8 md:h-4.5 rounded-full transition-colors relative tap-target ${
+                  generateAudio ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-strong)]'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 md:w-3.5 md:h-3.5 rounded-full bg-white transition-transform ${
+                    generateAudio ? 'left-[18px] md:left-4' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
+
+          {/* Video: Reference Video Upload (Seedance 2.0) */}
+          {mediaMode === 'video' && videoMeta?.supports_reference_video && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-[var(--color-text-muted)]">参考视频</label>
+              <div className="flex gap-2 items-center">
+                {referenceVideoUrl ? (
+                  <div className="flex-1 flex items-center gap-2 bg-[var(--color-surface-subtle)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-xs text-[var(--color-text)] truncate">
+                    <span className="truncate flex-1">{referenceVideoUrl.split('/').pop()}</span>
+                    <button onClick={() => setReferenceVideoUrl('')} className="text-[var(--color-text-subtle)] hover:text-[var(--color-destructive)] shrink-0">✕</button>
+                  </div>
+                ) : (
+                  <label className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-surface-subtle)] hover:bg-[var(--color-border)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-xs text-[var(--color-text-muted)] cursor-pointer transition-colors tap-target">
+                    <span>上传参考视频</span>
+                    <input type="file" accept="video/*" className="hidden" onChange={handleReferenceVideoUpload} />
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Video: Reference Audio Upload (Seedance 2.0) */}
+          {mediaMode === 'video' && videoMeta?.supports_reference_audio && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-[var(--color-text-muted)]">参考音频</label>
+              <div className="flex gap-2 items-center">
+                {referenceAudioUrl ? (
+                  <div className="flex-1 flex items-center gap-2 bg-[var(--color-surface-subtle)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-xs text-[var(--color-text)] truncate">
+                    <span className="truncate flex-1">{referenceAudioUrl.split('/').pop()}</span>
+                    <button onClick={() => setReferenceAudioUrl('')} className="text-[var(--color-text-subtle)] hover:text-[var(--color-destructive)] shrink-0">✕</button>
+                  </div>
+                ) : (
+                  <label className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-surface-subtle)] hover:bg-[var(--color-border)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-xs text-[var(--color-text-muted)] cursor-pointer transition-colors tap-target">
+                    <span>上传参考音频</span>
+                    <input type="file" accept="audio/*" className="hidden" onChange={handleReferenceAudioUpload} />
+                  </label>
+                )}
+              </div>
             </div>
           )}
         </div>
