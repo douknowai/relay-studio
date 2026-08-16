@@ -66,9 +66,13 @@ export const createVideoTaskSchema = z.object({
   ratio: z.enum(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive']).optional().default('16:9'),
   duration: z.number().int().min(-1).max(12).optional().default(5),
   reference_asset_ids: z.array(z.string().uuid()).max(2).optional().default([]),
+  /** Pre-uploaded reference video asset IDs (via /api/upload/reference) */
+  reference_video_asset_ids: z.array(z.string().uuid()).max(3).optional().default([]),
+  /** Pre-uploaded reference audio asset IDs (via /api/upload/reference) */
+  reference_audio_asset_ids: z.array(z.string().uuid()).max(3).optional().default([]),
   idempotency_key: z.string().max(128).optional(),
   task_type: z.enum(['text_to_video', 'image_to_video', 'first_last_frame']).optional().default('text_to_video'),
-  generate_audio: z.boolean().optional(),
+  generate_audio: z.boolean().optional().default(true),
   reference_videos: z.array(z.string().url()).max(3).optional(),
   reference_audios: z.array(z.string().url()).max(3).optional(),
   // Asset IDs returned by /api/upload/reference (used by Web UI)

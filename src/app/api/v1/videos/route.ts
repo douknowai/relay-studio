@@ -100,6 +100,8 @@ export async function POST(request: NextRequest) {
       reference_video_asset_ids: referenceVideoAssetIds,
       reference_audio_asset_ids: referenceAudioAssetIds,
       reference_asset_ids,
+      reference_video_asset_ids: referenceVideoAssetIds,
+      reference_audio_asset_ids: referenceAudioAssetIds,
       idempotency_key,
     } = body;
 
@@ -212,6 +214,13 @@ export async function POST(request: NextRequest) {
       referenceRoles = ['first_frame'];
     }
 
+    // Merge all reference asset IDs for linking (image refs + video refs + audio refs)
+    const allReferenceAssetIds = [
+      ...(reference_asset_ids || []),
+      ...(referenceVideoAssetIds || []),
+      ...(referenceAudioAssetIds || []),
+    ];
+
     // Create task via executor
     const task = await createTask({
       user_id: auth.userId,
@@ -231,16 +240,12 @@ export async function POST(request: NextRequest) {
         reference_video_asset_ids: referenceVideoAssetIds,
         reference_audio_asset_ids: referenceAudioAssetIds,
         reference_asset_ids,
+        reference_video_asset_ids: referenceVideoAssetIds,
+        reference_audio_asset_ids: referenceAudioAssetIds,
         reference_roles: referenceRoles,
       },
       idempotency_key: idempotency_key || undefined,
-      // Link ALL pre-uploaded references (images + videos + audios) to the task
-      reference_asset_ids: [
-        ...(reference_asset_ids || []),
-        ...mediaAssetIds,
-      ].length > 0
-        ? [...(reference_asset_ids || []), ...mediaAssetIds]
-        : undefined,
+      reference_asset_ids: allReferenceAssetIds.length > 0 ? allReferenceAssetIds : undefined,
       requestSource: auth.authMethod === 'apikey' ? 'api' : 'web',
       api_key_id: auth.apiKeyId,
     });

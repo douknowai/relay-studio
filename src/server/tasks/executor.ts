@@ -528,6 +528,37 @@ async function executeVideoTask(
       ? explicitAudioUrls
       : await resolveReferenceAssetUrls((params.reference_audio_asset_ids as string[]) || []);
 
+    // Resolve pre-uploaded reference video/audio asset IDs to signed URLs
+    const refVideoAssetIds = (params.reference_video_asset_ids as string[]) || [];
+    if (refVideoAssetIds.length > 0) {
+      const { data: refVideoAssets } = await client
+        .from('generation_references')
+        .select('object_key')
+        .in('id', refVideoAssetIds)
+        .eq('user_id', task.user_id);
+      if (refVideoAssets && refVideoAssets.length > 0) {
+        const signedUrls = await Promise.all(
+          refVideoAssets.map(async (r) => generateSignedUrl(r.object_key, 300))
+        );
+        referenceVideoUrls.push(...signedUrls);
+      }
+    }
+
+    const refAudioAssetIds = (params.reference_audio_asset_ids as string[]) || [];
+    if (refAudioAssetIds.length > 0) {
+      const { data: refAudioAssets } = await client
+        .from('generation_references')
+        .select('object_key')
+        .in('id', refAudioAssetIds)
+        .eq('user_id', task.user_id);
+      if (refAudioAssets && refAudioAssets.length > 0) {
+        const signedUrls = await Promise.all(
+          refAudioAssets.map(async (r) => generateSignedUrl(r.object_key, 300))
+        );
+        referenceAudioUrls.push(...signedUrls);
+      }
+    }
+
     const providerRequest: VideoProviderRequest = {
       prompt: task.prompt,
       model_id: (modelConfig.external_model_id as string) || '',
