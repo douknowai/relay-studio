@@ -75,9 +75,6 @@ export const createVideoTaskSchema = z.object({
   generate_audio: z.boolean().optional().default(true),
   reference_videos: z.array(z.string().url()).max(3).optional(),
   reference_audios: z.array(z.string().url()).max(3).optional(),
-  // Asset IDs returned by /api/upload/reference (used by Web UI)
-  reference_video_asset_ids: z.array(z.string().uuid()).max(3).optional(),
-  reference_audio_asset_ids: z.array(z.string().uuid()).max(3).optional(),
   watermark: z.boolean().optional(),
   camerafixed: z.boolean().optional(),
   image_url: z.string().url().optional(),
