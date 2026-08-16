@@ -7,21 +7,18 @@ import { fetchWithTimeout } from '@/lib/fetch-utils';
 import { ModelConfig, TaskStatus } from '@/types';
 import type { VideoCapabilityMetadata } from '@/types';
 
-interface QuotaInfo {
+interface CategoryQuota {
   daily_limit: number;
   daily_used: number;
   monthly_limit: number;
   monthly_used: number;
+}
+
+interface QuotaInfo {
+  image: CategoryQuota;
+  video: CategoryQuota;
   max_concurrent: number;
   current_concurrent: number;
-  daily_image_used?: number;
-  daily_image_limit?: number;
-  monthly_image_used?: number;
-  monthly_image_limit?: number;
-  daily_video_used?: number;
-  daily_video_limit?: number;
-  monthly_video_used?: number;
-  monthly_video_limit?: number;
 }
 
 interface GeneratedImage {
@@ -922,8 +919,8 @@ export default function StudioPage() {
           {/* Quota info */}
           {quota && (
             <div className="flex items-center justify-between text-[10px] text-[var(--color-text-subtle)]">
-              <span>今日 {mediaMode === 'image' ? `${quota.daily_image_used ?? quota.daily_used}/${quota.daily_image_limit ?? quota.daily_limit}` : `${quota.daily_video_used ?? quota.daily_used}/${quota.daily_video_limit ?? quota.daily_limit}`}</span>
-              <span>本月 {mediaMode === 'image' ? `${quota.monthly_image_used ?? quota.monthly_used}/${quota.monthly_image_limit ?? quota.monthly_limit}` : `${quota.monthly_video_used ?? quota.monthly_used}/${quota.monthly_video_limit ?? quota.monthly_limit}`}</span>
+              <span>今日 {mediaMode === 'image' ? `${quota.image.daily_used}/${quota.image.daily_limit}` : `${quota.video.daily_used}/${quota.video.daily_limit}`}</span>
+              <span>本月 {mediaMode === 'image' ? `${quota.image.monthly_used}/${quota.image.monthly_limit}` : `${quota.video.monthly_used}/${quota.video.monthly_limit}`}</span>
             </div>
           )}
 

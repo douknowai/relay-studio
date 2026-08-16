@@ -122,6 +122,48 @@ export async function GET(request: NextRequest) {
       .eq('key', 'generation_enabled')
       .single();
 
+    // Recent 7-day usage trend (succeeded only)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const { data: recentRecords } = await supabase
+      .from('usage_records')
+      .select('model_config_id, created_at')
+      .eq('user_id', auth.userId)
+      .eq('status', 'succeeded')
+      .gte('created_at', sevenDaysAgo.toISOString());
+
+    const recentModelIds = [...new Set((recentRecords || []).map((r: { model_config_id: string }) => r.model_config_id))];
+    const { data: recentModelConfigs } = recentModelIds.length > 0
+      ? await supabase.from('model_configs').select('id, provider_type').in('id', recentModelIds)
+      : { data: [] };
+    const recentTypeMap = new Map(
+      (recentModelConfigs || []).map((m: { id: string; provider_type: string }) => [m.id, m.provider_type])
+    );
+
+    const dayBuckets = new Map<string, { image_count: number; video_count: number }>();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      dayBuckets.set(d.toISOString().split('T')[0], { image_count: 0, video_count: 0 });
+    }
+    for (const r of (recentRecords || [])) {
+      const day = (r as { created_at: string }).created_at.slice(0, 10);
+      const bucket = dayBuckets.get(day);
+      if (!bucket) continue;
+      const pt = recentTypeMap.get((r as { model_config_id: string }).model_config_id);
+      if (!pt) continue;
+      if (pt.includes('video')) bucket.video_count++;
+      else bucket.image_count++;
+    }
+    const recentUsage = Array.from(dayBuckets.entries()).map(([date, v]) => ({
+      date,
+      image_count: v.image_count,
+      video_count: v.video_count,
+      count: v.image_count + v.video_count,
+    }));
+
     return successResponse({
       quota: {
         image: {
@@ -148,6 +190,7 @@ export async function GET(request: NextRequest) {
         video: calcStats(monthlyVideoRecords as unknown as Array<{ status: string; latency_ms: number | null }>),
       },
       by_model: byModel,
+      recent_usage: recentUsage,
       generation_enabled: genSetting?.value === 'true',
     }, auth.requestId);
   } catch (err) {

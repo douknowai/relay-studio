@@ -8,8 +8,18 @@ import {
 } from '@/server/api-helpers';
 import { AppError, ErrorCodes } from '@/server/errors';
 
-const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const VIDEO_MIME_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+const AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/ogg', 'audio/flac', 'audio/mp4', 'audio/x-m4a', 'audio/m4a'];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB (Seedance 2.0 reference videos)
+const MAX_AUDIO_SIZE = 20 * 1024 * 1024; // 20MB
+
+function getMaxSizeForMime(mime: string): number {
+  if (VIDEO_MIME_TYPES.includes(mime)) return MAX_VIDEO_SIZE;
+  if (AUDIO_MIME_TYPES.includes(mime)) return MAX_AUDIO_SIZE;
+  return MAX_IMAGE_SIZE;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,13 +34,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate MIME type
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      throw new AppError(ErrorCodes.INVALID_FILE, '仅支持 PNG、JPEG 和 WebP 格式');
+    const allowed = [...IMAGE_MIME_TYPES, ...VIDEO_MIME_TYPES, ...AUDIO_MIME_TYPES];
+    if (!allowed.includes(file.type)) {
+      throw new AppError(ErrorCodes.INVALID_FILE, '仅支持 PNG、JPEG、WebP 图片，MP4/WebM/MOV 视频和常见音频格式');
     }
 
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
-      throw new AppError(ErrorCodes.INVALID_FILE, '文件大小不能超过 10MB');
+    // Validate file size (per media type)
+    const maxSize = getMaxSizeForMime(file.type);
+    if (file.size > maxSize) {
+      const maxMb = Math.round(maxSize / 1024 / 1024);
+      throw new AppError(ErrorCodes.INVALID_FILE, `文件大小不能超过 ${maxMb}MB`);
     }
 
     // Upload to storage

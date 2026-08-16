@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       page_size: pageSize,
       favorite,
       task_id: taskId,
+      model_code: modelCode,
     } = queryParams;
 
     let query = supabase
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
 
     if (favorite === 'true') query = query.eq('favorite', true);
     if (taskId) query = query.eq('task_id', taskId);
+    if (modelCode) query = query.eq('model_code', modelCode);
 
     const { data, error, count } = await query;
     if (error) return errorResponse(new Error('获取图片失败'), auth.requestId);
@@ -159,7 +161,9 @@ export async function POST(request: NextRequest) {
       throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持图生图');
     }
 
-    if (visible_watermark && !modelConfig.supports_visible_watermark_control) {
+    if (!visible_watermark && !modelConfig.supports_visible_watermark_control) {
+      // Turning the watermark OFF requires explicit provider support;
+      // watermarks ON is always allowed (it is the default behavior).
       throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持关闭可见水印');
     }
     if (n > 1 && !modelConfig.supports_sequential_generation) {

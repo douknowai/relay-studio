@@ -35,6 +35,7 @@ export async function PATCH(request: NextRequest) {
     const supabase = getSupabaseServerClient();
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    // display_name === null clears the name back to the default
     if (display_name !== undefined) updates.display_name = display_name;
 
     const { data, error } = await supabase

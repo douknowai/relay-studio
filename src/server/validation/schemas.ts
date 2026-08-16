@@ -56,6 +56,7 @@ export const imageListQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(100).default(24),
   favorite: z.enum(['true', 'false']).optional(),
   task_id: z.string().uuid().optional(),
+  model_code: z.string().optional(),
 });
 
 export const createVideoTaskSchema = z.object({
@@ -70,6 +71,11 @@ export const createVideoTaskSchema = z.object({
   generate_audio: z.boolean().optional(),
   reference_videos: z.array(z.string().url()).max(3).optional(),
   reference_audios: z.array(z.string().url()).max(3).optional(),
+  // Asset IDs returned by /api/upload/reference (used by Web UI)
+  reference_video_asset_ids: z.array(z.string().uuid()).max(3).optional(),
+  reference_audio_asset_ids: z.array(z.string().uuid()).max(3).optional(),
+  watermark: z.boolean().optional(),
+  camerafixed: z.boolean().optional(),
   image_url: z.string().url().optional(),
   image_role: z.enum(['first_frame', 'last_frame']).optional(),
 });
@@ -122,7 +128,8 @@ export const revokeApiKeySchema = z.object({
 });
 
 export const updateProfileSchema = z.object({
-  display_name: z.string().min(1).max(128).optional(),
+  // null clears the display name back to the email-derived default
+  display_name: z.string().min(1).max(128).nullable().optional(),
 });
 
 export const updateUserQuotaSchema = z.object({

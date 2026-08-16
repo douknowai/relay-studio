@@ -93,13 +93,36 @@ export async function POST(request: NextRequest) {
       ratio,
       duration,
       generate_audio: generateAudio,
+      watermark,
+      camerafixed,
       reference_videos: referenceVideos,
       reference_audios: referenceAudios,
+      reference_video_asset_ids: referenceVideoAssetIds,
+      reference_audio_asset_ids: referenceAudioAssetIds,
       reference_asset_ids,
       idempotency_key,
     } = body;
 
     const supabase = getSupabaseClient();
+
+    // Validate ownership of reference video/audio assets (uploaded via
+    // /api/upload/reference). They must exist, belong to the caller, and
+    // not be linked to another task yet.
+    const mediaAssetIds = [
+      ...(referenceVideoAssetIds || []),
+      ...(referenceAudioAssetIds || []),
+    ];
+    if (mediaAssetIds.length > 0) {
+      const { count: ownedCount } = await supabase
+        .from('generation_references')
+        .select('id', { count: 'exact', head: true })
+        .in('id', mediaAssetIds)
+        .eq('user_id', auth.userId)
+        .is('task_id', null);
+      if ((ownedCount ?? 0) !== mediaAssetIds.length) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, '参考视频/音频不存在或已被使用');
+      }
+    }
 
     // 1. Check generation enabled (fail-closed)
     const { data: genSetting } = await supabase
@@ -201,13 +224,23 @@ export async function POST(request: NextRequest) {
         duration,
         n: 1,
         generate_audio: generateAudio,
+        watermark,
+        camerafixed,
         reference_videos: referenceVideos,
         reference_audios: referenceAudios,
+        reference_video_asset_ids: referenceVideoAssetIds,
+        reference_audio_asset_ids: referenceAudioAssetIds,
         reference_asset_ids,
         reference_roles: referenceRoles,
       },
       idempotency_key: idempotency_key || undefined,
-      reference_asset_ids: reference_asset_ids?.length > 0 ? reference_asset_ids : undefined,
+      // Link ALL pre-uploaded references (images + videos + audios) to the task
+      reference_asset_ids: [
+        ...(reference_asset_ids || []),
+        ...mediaAssetIds,
+      ].length > 0
+        ? [...(reference_asset_ids || []), ...mediaAssetIds]
+        : undefined,
       requestSource: auth.authMethod === 'apikey' ? 'api' : 'web',
       api_key_id: auth.apiKeyId,
     });

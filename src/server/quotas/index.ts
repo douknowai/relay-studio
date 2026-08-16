@@ -96,7 +96,9 @@ export async function checkQuota(userId: string, modelCode: string): Promise<voi
     .eq('key', 'generation_enabled')
     .single();
 
-  if (genSetting?.value === 'false') {
+  // Fail-closed, consistent with the /api/v1/images|videos routes:
+  // a missing setting means generation is disabled.
+  if (genSetting?.value !== 'true') {
     throw new AppError(ErrorCodes.GENERATION_DISABLED, 'Generation is currently disabled');
   }
 
@@ -177,18 +179,22 @@ export async function getQuotaUsage(userId: string): Promise<{
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
 
+  // Video task types are text_to_video / image_to_video / first_last_frame —
+  // none of them start with "video", so a prefix LIKE would always miss.
+  const VIDEO_TASK_TYPES = ['text_to_video', 'image_to_video', 'first_last_frame'];
+
   const [dailyVideo, monthlyVideo] = await Promise.all([
     client
       .from('generation_tasks')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .like('task_type', 'video%')
+      .in('task_type', VIDEO_TASK_TYPES)
       .gte('created_at', todayStart),
     client
       .from('generation_tasks')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .like('task_type', 'video%')
+      .in('task_type', VIDEO_TASK_TYPES)
       .gte('created_at', monthStart),
   ]);
 

@@ -256,10 +256,14 @@ export interface ApiErrorResponse {
   request_id: string;
 }
 
+// Matches server `paginatedResponse()` shape (src/server/api-helpers.ts)
 export interface PaginatedResponse<T> {
   data: T[];
-  total: number;
-  page: number;
-  page_size: number;
+  pagination: {
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+  };
   request_id: string;
 }

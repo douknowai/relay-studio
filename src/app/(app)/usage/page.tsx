@@ -5,26 +5,19 @@ import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
 import { PageSkeleton, ErrorState, EmptyState } from '@/components/loading-states';
 
+interface CategoryQuota {
+  daily_limit: number;
+  daily_used: number;
+  monthly_limit: number;
+  monthly_used: number;
+}
+
 interface UsageData {
   quota: {
-    daily_limit: number;
-    daily_used: number;
-    monthly_limit: number;
-    monthly_used: number;
+    image: CategoryQuota;
+    video: CategoryQuota;
     max_concurrent: number;
     current_concurrent: number;
-  };
-  image_usage?: {
-    daily_limit: number;
-    daily_used: number;
-    monthly_limit: number;
-    monthly_used: number;
-  };
-  video_usage?: {
-    daily_limit: number;
-    daily_used: number;
-    monthly_limit: number;
-    monthly_used: number;
   };
   generation_enabled: boolean;
   recent_usage: Array<{
@@ -78,15 +71,21 @@ export default function UsagePage() {
     return <EmptyState message="数据不可用" />;
   }
 
-  const { quota, image_usage, video_usage } = usage;
-  const dailyPercent = quota.daily_limit > 0 ? Math.round((quota.daily_used / quota.daily_limit) * 100) : 0;
-  const monthlyPercent = quota.monthly_limit > 0 ? Math.round((quota.monthly_used / quota.monthly_limit) * 100) : 0;
+  const { quota, recent_usage } = usage;
+  const image_usage = quota.image;
+  const video_usage = quota.video;
+  const totalDailyUsed = image_usage.daily_used + video_usage.daily_used;
+  const totalDailyLimit = image_usage.daily_limit + video_usage.daily_limit;
+  const totalMonthlyUsed = image_usage.monthly_used + video_usage.monthly_used;
+  const totalMonthlyLimit = image_usage.monthly_limit + video_usage.monthly_limit;
+  const dailyPercent = totalDailyLimit > 0 ? Math.round((totalDailyUsed / totalDailyLimit) * 100) : 0;
+  const monthlyPercent = totalMonthlyLimit > 0 ? Math.round((totalMonthlyUsed / totalMonthlyLimit) * 100) : 0;
 
-  const hasImageUsage = image_usage && (image_usage.daily_limit > 0 || image_usage.daily_used > 0);
-  const hasVideoUsage = video_usage && (video_usage.daily_limit > 0 || video_usage.daily_used > 0);
+  const hasImageUsage = image_usage.daily_limit > 0 || image_usage.daily_used > 0;
+  const hasVideoUsage = video_usage.daily_limit > 0 || video_usage.daily_used > 0;
   const hasCategoryData = hasImageUsage || hasVideoUsage;
 
-  const maxRecentCount = Math.max(...(usage.recent_usage?.map(r => r.count) || [1]), 1);
+  const maxRecentCount = Math.max(...(recent_usage?.map(r => r.count) || [1]), 1);
 
   return (
     <div className="p-4 md:p-6 max-w-3xl">
@@ -171,7 +170,7 @@ export default function UsagePage() {
           <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-[var(--color-text-muted)]">今日额度</span>
-              <span className="text-xs text-[var(--color-text)]">{quota.daily_used} / {quota.daily_limit}</span>
+              <span className="text-xs text-[var(--color-text)]">{totalDailyUsed} / {totalDailyLimit}</span>
             </div>
             <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
               <div className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
@@ -182,7 +181,7 @@ export default function UsagePage() {
           <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-[var(--color-text-muted)]">本月额度</span>
-              <span className="text-xs text-[var(--color-text)]">{quota.monthly_used} / {quota.monthly_limit}</span>
+              <span className="text-xs text-[var(--color-text)]">{totalMonthlyUsed} / {totalMonthlyLimit}</span>
             </div>
             <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
               <div className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
@@ -204,11 +203,11 @@ export default function UsagePage() {
       </div>
 
       {/* Recent Usage Chart */}
-      {usage.recent_usage && usage.recent_usage.length > 0 && (
+      {recent_usage && recent_usage.length > 0 && (
         <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
           <h2 className="text-xs font-medium text-[var(--color-text-muted)] mb-3">近 7 天使用趋势</h2>
           <div className="flex items-end gap-1.5 md:gap-2 h-28 md:h-32">
-            {usage.recent_usage.map((item) => (
+            {recent_usage.map((item) => (
               <div key={item.date} className="flex-1 flex flex-col items-center gap-1">
                 <span className="text-[10px] text-[var(--color-text-subtle)]">{item.count}</span>
                 <div className="w-full flex flex-col gap-0.5" style={{ height: `${Math.max((item.count / maxRecentCount) * 80, 4)}px`, justifyContent: 'flex-end' }}>

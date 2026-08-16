@@ -501,9 +501,32 @@ async function executeVideoTask(
       }
     }
 
-    // Extract reference video/audio URLs from request parameters
-    const referenceVideoUrls = (params.reference_videos as string[]) || [];
-    const referenceAudioUrls = (params.reference_audios as string[]) || [];
+    // Resolve reference video/audio inputs.
+    // Priority: explicit URLs (API callers) → asset IDs (Web UI uploads,
+    // resolved via generation_references → signed object-storage URLs).
+    const resolveReferenceAssetUrls = async (assetIds: string[]): Promise<string[]> => {
+      if (assetIds.length === 0) return [];
+      const { data: refs } = await client
+        .from('generation_references')
+        .select('object_key')
+        .in('id', assetIds)
+        .eq('user_id', task.user_id);
+      if (!refs || refs.length === 0) return [];
+      // Long-lived signed URL: the provider fetches the media when the
+      // async video task starts, which can lag task creation by minutes.
+      return Promise.all(
+        refs.map(async (r) => generateSignedUrl(r.object_key, 3600))
+      );
+    };
+
+    const explicitVideoUrls = (params.reference_videos as string[]) || [];
+    const explicitAudioUrls = (params.reference_audios as string[]) || [];
+    const referenceVideoUrls = explicitVideoUrls.length > 0
+      ? explicitVideoUrls
+      : await resolveReferenceAssetUrls((params.reference_video_asset_ids as string[]) || []);
+    const referenceAudioUrls = explicitAudioUrls.length > 0
+      ? explicitAudioUrls
+      : await resolveReferenceAssetUrls((params.reference_audio_asset_ids as string[]) || []);
 
     const providerRequest: VideoProviderRequest = {
       prompt: task.prompt,
