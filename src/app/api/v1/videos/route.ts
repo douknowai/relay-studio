@@ -238,8 +238,6 @@ export async function POST(request: NextRequest) {
         reference_video_asset_ids: referenceVideoAssetIds,
         reference_audio_asset_ids: referenceAudioAssetIds,
         reference_asset_ids,
-        reference_video_asset_ids: referenceVideoAssetIds,
-        reference_audio_asset_ids: referenceAudioAssetIds,
         reference_roles: referenceRoles,
       },
       idempotency_key: idempotency_key || undefined,
