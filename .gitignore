@@ -31,6 +31,10 @@
 .env.*
 !.env.example
 !.env.*.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.local
 config.local.*
 
@@ -90,6 +94,8 @@ secrets.*
 # 可发布静态资源应放入 public/。
 /assets/
 /scripts/local/
+/data/
+/tmp/
 /.preview
 
 # 内部开发文档与 AI 开发指令（避免内部架构、进度、设计规范泄露）

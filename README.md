@@ -1,12 +1,54 @@
 # Relay Studio
 
-面向白名单用户的内部 AI 媒体生成工作台。通过 Provider 适配层统一封装扣子官方的图像与视频生成能力，提供 Web 控制台和 OpenAI 兼容 API。
+面向白名单用户的内部 AI 媒体生成工作台。通过 Provider 适配层统一封装图像与视频生成能力，提供 Web 控制台和 OpenAI 兼容 API。
 
 ![status](https://img.shields.io/badge/status-internal%20use-orange)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![React](https://img.shields.io/badge/React-19-149eca)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3eaf7c)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+---
+
+## 目录
+
+- [快速开始](#快速开始)
+- [核心能力](#核心能力)
+- [技术栈](#技术栈)
+- [架构概览](#架构概览)
+- [目录约定](#目录约定)
+- [本地开发](#本地开发)
+- [常用命令](#常用命令)
+- [OpenAI 兼容 API](#openai-兼容-api)
+- [数据与安全](#数据与安全)
+- [发布顺序](#发布顺序)
+- [协作规范](#协作规范)
+- [License](#license)
+
+---
+
+## 快速开始
+
+```bash
+# 1. 安装依赖
+corepack enable
+pnpm install --frozen-lockfile
+
+# 2. 配置环境变量
+cp .env.example .env.local
+# 编辑 .env.local 填写真实值
+
+# 3. 升级数据库
+pnpm dlx coze-coding-ai db upgrade
+
+# 4. 启动开发服务
+pnpm dev
+```
+
+首次部署需初始化管理员，详见[本地开发](#4-启动与初始化)。
+
+---
 
 ## 核心能力
 
@@ -17,6 +59,8 @@
 - **额度与权限**：日/月额度、并发限制、模型白名单和细粒度 API Key Scope。
 - **管理后台**：用户、任务、资产、模型、系统设置、审计日志和健康状态。
 - **安全基线**：Supabase Auth、行级安全策略（RLS）、服务端密钥、短时签名 URL、结构化日志脱敏、内容审核与安全响应头。
+
+---
 
 ## 技术栈
 
@@ -32,6 +76,36 @@
 | 视频 Provider | `coze-coding-dev-sdk` VideoGenerationClient（Seedance） |
 | 校验与测试 | Zod 4、Node Test Runner、ESLint |
 | 包管理器 | pnpm 9+ |
+
+---
+
+## 架构概览
+
+```text
+┌─────────────────────────────────────────────────┐
+│                   Web 控制台                     │
+│  (Next.js App Router + shadcn/ui + Tailwind)    │
+├──────────────────────┬──────────────────────────┤
+│  OpenAI-compatible   │    Admin Dashboard       │
+│  API (/api/v1/*)     │    (/admin/*)            │
+├──────────┬───────────┴──────┬───────────────────┤
+│  Auth    │  Task System     │  Quota           │
+│  (SSO)   │  (atomic ops)    │  (rate-limit)    │
+├──────────┴──────────────────┴───────────────────┤
+│  Provider 适配层 (Image + Video)                │
+├─────────────────────────────────────────────────┤
+│  Coze SDK  │  Object Storage  │  Supabase      │
+│  (API)     │  (S3)            │  (DB + Auth)   │
+└────────────┴──────────────────┴────────────────┘
+```
+
+系统分为四层：
+1. **展示层** — Web 控制台 + 管理后台，基于 Next.js App Router
+2. **API 层** — OpenAI 兼容的 RESTful 接口，统一认证与任务调度
+3. **业务层** — 认证、任务系统、额度管理、Provider 适配
+4. **基础设施层** — Coze SDK、对象存储、Supabase（数据库 + 认证）
+
+---
 
 ## 目录约定
 
@@ -64,6 +138,8 @@
 
 新增代码应放在职责对应的目录中。可发布资源放入 `public/`；个人素材、临时脚本、IDE 和 AI 开发工具配置不得进入版本库。
 
+---
+
 ## 本地开发
 
 ### 前置条件
@@ -73,7 +149,7 @@
 - Bash 环境；Windows 可使用 Git Bash 或 WSL
 - Supabase 项目
 - S3 兼容对象存储
-- 可用的扣子图像与视频生成运行环境
+- 可用的图像与视频生成运行环境
 
 ### 1. 安装依赖
 
@@ -121,7 +197,7 @@ Copy-Item .env.example .env.local
 pnpm dlx coze-coding-ai db upgrade
 ```
 
-数据库迁移必须先于应用版本发布。当前服务端依赖 `supabase/migrations/0003_identity_rls_atomic_quota.sql` 中的 RLS、原子额度预留、任务领取、取消和重试函数；未执行迁移时不要部署对应代码。
+数据库迁移必须先于应用版本发布。当前服务端依赖 `supabase/migrations/` 中的迁移脚本；未执行迁移时不要部署对应代码。
 
 ### 4. 启动与初始化
 
@@ -137,6 +213,8 @@ X-Bootstrap-Token: <BOOTSTRAP_TOKEN>
 ```
 
 该接口幂等；已有管理员时不会重复创建。生产环境必须配置非空 `BOOTSTRAP_TOKEN`。
+
+---
 
 ## 常用命令
 
@@ -159,6 +237,8 @@ pnpm validate
 pnpm build
 ```
 
+---
+
 ## OpenAI 兼容 API
 
 `/api/v1/` 下的接口兼容 OpenAI API 格式，支持 `base_url` 指向本服务。
@@ -173,7 +253,7 @@ API Key 可按资源授予 `images:*`、`videos:*`、`tasks:*`、`models:read`�
 ### 接口列表
 
 | 端点 | 方法 | 说明 |
-|------|------|------|
+|---|---|---|
 | `/api/v1/models` | GET | 列出可用模型 |
 | `/api/v1/images/generations` | POST | 同步生成图片，兼容 OpenAI Images API |
 | `/api/v1/videos` | POST | 异步生成视频（文生/图生/首尾帧），返回 task_id |
@@ -245,6 +325,8 @@ Content-Type: application/json
 
 图生视频和首尾帧模式额外接受 `image_url` / `first_frame_url` / `last_frame_url` 参数。
 
+---
+
 ## 数据与安全
 
 - 服务端 Provider 凭据和 Supabase Service Role Key 不会发送到浏览器。
@@ -257,6 +339,8 @@ Content-Type: application/json
 - 远程资源抓取包含协议、私网地址、大小和超时限制；生产环境仍建议配置网络出口白名单。
 - 管理员初始化完成后应轮换或移除 Bootstrap 凭据。
 
+---
+
 ## 发布顺序
 
 1. 在预发布数据库执行新增迁移并验证回滚/兼容策略。
@@ -268,6 +352,8 @@ Content-Type: application/json
 
 本项目不会自动修改生产数据库，也不会自动部署；迁移和发布应分别经过审批。
 
+---
+
 ## 协作规范
 
 - 仅使用 pnpm，不使用 npm 或 Yarn 安装依赖。
@@ -275,6 +361,8 @@ Content-Type: application/json
 - 数据库迁移只追加新文件，不修改已经发布的迁移。
 - 修复缺陷时优先增加可复现测试；行为变更需同步更新 README。
 - 提交前检查 `git status`，确保 `.env*`、本地工具配置、调试素材和构建产物未被暂存。
+
+---
 
 ## License
 
