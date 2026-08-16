@@ -301,7 +301,7 @@ Content-Type: application/json
 }
 ```
 
-`n` 支持 1–4，最终上限还受用户额度和模型配置约束。`size` 同时接受原生尺寸与 `1024x1024` 等 OpenAI 格式。`response_format` 支持 `url` 和 `b64_json`。
+`n` 支持 1–4，最终上限还受用户额度和模型配置约束。`size` 同时接受原生尺寸与 `1024x1024` 等 OpenAI 格式。`response_format` 支持 `url` 和 `b64_json`。可选 `visible_watermark`（boolean，默认 `false`）；关闭水印为默认行为，开启水印需模型支持相应能力。
 
 ### 视频生成请求
 
@@ -324,6 +324,20 @@ Content-Type: application/json
 ```
 
 图生视频和首尾帧模式额外接受 `image_url` / `first_frame_url` / `last_frame_url` 参数。
+
+可选参数：
+
+| 参数 | 类型 | 说明 |
+|---|---|---|
+| `generate_audio` | boolean | 是否生成音频 |
+| `reference_videos` | string[]（URL） | 参考视频，最多 3 个，供 API 调用方直接传 URL |
+| `reference_audios` | string[]（URL） | 参考音频，最多 3 个 |
+| `reference_video_asset_ids` | string[]（UUID） | 参考视频资产 ID，最多 3 个；服务端校验归属并转换为签名 URL，Web 控制台使用 |
+| `reference_audio_asset_ids` | string[]（UUID） | 参考音频资产 ID，最多 3 个；同上 |
+| `watermark` | boolean | 是否添加水印；关闭水印需要模型支持 |
+| `camerafixed` | boolean | 是否固定镜头 |
+
+参考视频/音频资产需先通过 `POST /api/upload/reference` 上传（视频支持 mp4/webm/mov，音频支持 mp3/wav/aac 等常见格式），上传响应中的 `asset.id` 即为 asset_id。
 
 ---
 

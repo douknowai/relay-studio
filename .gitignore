@@ -148,8 +148,3 @@ Desktop.ini
 /vendor/
 /bin/
 /.optional-files
-
-# Preview files
-.preview
-.cozeproj/reduction
-.codegraph
