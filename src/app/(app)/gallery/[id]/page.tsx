@@ -114,7 +114,7 @@ export default function GalleryDetailPage() {
   }
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
       <div className="flex items-center gap-3 mb-4 md:mb-6">
         <button
           onClick={() => router.push('/gallery')}
@@ -125,7 +125,7 @@ export default function GalleryDetailPage() {
             <path d="M11 4L6 9l5 5" />
           </svg>
         </button>
-        <h1 className="text-lg font-semibold text-[var(--color-text)]">图片详情</h1>
+        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">图片详情</h1>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 md:gap-6">

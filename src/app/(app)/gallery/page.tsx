@@ -159,9 +159,9 @@ export default function GalleryPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
-        <h1 className="text-lg font-semibold text-[var(--color-text)]">图库</h1>
+        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">图库</h1>
         <div className="flex gap-2 items-center flex-wrap">
           <button
             onClick={() => setFavoriteOnly(!favoriteOnly)}

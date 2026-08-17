@@ -269,16 +269,16 @@ export default function AdminModelsPage() {
   const isVideo = isVideoProvider(form.provider_type);
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
-        <h1 className="text-lg font-semibold text-[var(--color-text)]">模型配置</h1>
+        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">模型配置</h1>
         <button
           onClick={() => {
             setEditingModel(null);
             setForm(defaultImageForm);
             setShowCreate(true);
           }}
-          className="px-3 py-2 md:py-1.5 text-xs font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--radius-md)] tap-target self-start"
+          className="px-3 py-2 md:py-1.5 text-xs font-medium text-white bg-[#1A1A1A] hover:bg-[#333333] rounded-[var(--radius-md)] tap-target self-start"
         >
           添加模型
         </button>
@@ -413,7 +413,7 @@ export default function AdminModelsPage() {
             <button onClick={() => { setShowCreate(false); setEditingModel(null); }}
               className="px-3 py-2 md:py-1.5 text-xs border border-[var(--color-border)] rounded-[var(--radius-sm)] tap-target">取消</button>
             <button onClick={handleSave}
-              className="px-3 py-2 md:py-1.5 text-xs text-white bg-[var(--color-accent)] rounded-[var(--radius-sm)] tap-target">保存</button>
+              className="px-3 py-2 md:py-1.5 text-xs text-white bg-[#1A1A1A] hover:bg-[#333333] rounded-[var(--radius-sm)] tap-target">保存</button>
           </div>
         </div>
       )}

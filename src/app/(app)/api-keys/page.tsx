@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
+import { ConsolePage } from '@/components/console';
 import { TableSkeleton, ErrorState, EmptyState } from '@/components/loading-states';
 
 interface ApiKey {
@@ -117,7 +118,7 @@ function ScopeEditor({
           type="button"
           onClick={onSave}
           disabled={saving || scopes.length === 0}
-          className="text-xs font-medium px-3 py-1.5 rounded bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="text-xs font-medium px-3 py-1.5 rounded bg-[#1A1A1A] text-white hover:bg-[#333333] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? '保存中…' : '保存'}
         </button>
@@ -326,9 +327,10 @@ export default function ApiKeysPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
-        <h1 className="text-lg font-semibold text-[var(--color-text)]">API Keys</h1>
+    <ConsolePage
+      title="API Keys"
+      description="用于程序化调用 Relay Studio 开放 API，支持 OpenAI 兼容格式接入"
+      actions={
         <button
           onClick={() => {
             if (!apiAccessEnabled) return;
@@ -337,11 +339,12 @@ export default function ApiKeysPage() {
             setShowCreateDialog(true);
           }}
           disabled={!apiAccessEnabled}
-          className="px-3 py-2 md:py-1.5 text-xs font-medium text-white bg-[var(--color-accent)] rounded-[var(--radius-sm)] hover:bg-[var(--color-accent-hover)] transition-colors tap-target disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-9 px-4 text-[13px] font-medium text-white bg-[#1A1A1A] rounded-[8px] hover:bg-[#333] transition-colors tap-target disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + 新建 Key
         </button>
-      </div>
+      }
+    >
 
       {/* API Access Disabled Banner */}
       {!isLoading && !loadError && !apiAccessEnabled && (
@@ -645,6 +648,6 @@ export default function ApiKeysPage() {
           </div>
         </>
       )}
-    </div>
+    </ConsolePage>
   );
 }

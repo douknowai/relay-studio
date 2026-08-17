@@ -45,8 +45,8 @@ export default function AdminAssetsPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="p-4 md:p-6">
-      <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4 md:mb-6">资产管理</h1>
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
+      <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A] mb-4 md:mb-6">资产管理</h1>
       {isLoading ? (
         <TableSkeleton rows={5} cols={4} />
       ) : error ? (

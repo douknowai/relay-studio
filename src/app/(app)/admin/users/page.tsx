@@ -90,12 +90,12 @@ export default function AdminUsersPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
-        <h1 className="text-lg font-semibold text-[var(--color-text)]">用户管理</h1>
+        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">用户管理</h1>
         <button
           onClick={() => setShowInvite(true)}
-          className="px-3 py-2 md:py-1.5 text-xs font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--radius-md)] tap-target self-start"
+          className="px-3 py-2 md:py-1.5 text-xs font-medium text-white bg-[#1A1A1A] hover:bg-[#333333] rounded-[var(--radius-md)] tap-target self-start"
         >
           创建用户
         </button>
@@ -135,7 +135,7 @@ export default function AdminUsersPage() {
               className="flex-1 px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]"
             />
             <div className="flex gap-2">
-              <button onClick={handleInvite} className="flex-1 sm:flex-none px-3 py-2 md:py-1.5 text-xs text-white bg-[var(--color-accent)] rounded-[var(--radius-sm)] tap-target">创建</button>
+              <button onClick={handleInvite} className="flex-1 sm:flex-none px-3 py-2 md:py-1.5 text-xs text-white bg-[#1A1A1A] hover:bg-[#333333] rounded-[var(--radius-sm)] tap-target">创建</button>
               <button onClick={() => setShowInvite(false)} className="flex-1 sm:flex-none px-3 py-2 md:py-1.5 text-xs border border-[var(--color-border)] rounded-[var(--radius-sm)] tap-target">取消</button>
             </div>
           </div>

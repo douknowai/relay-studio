@@ -66,9 +66,9 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-2">
-        <h1 className="text-lg font-semibold text-[var(--color-text)]">管理总览</h1>
+        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">管理总览</h1>
         {!data?.generation_enabled && (
           <span className="self-start px-2 py-1 text-xs bg-[var(--color-warning-subtle)] text-[var(--color-warning)] rounded-[var(--radius-sm)]">
             生成服务已关闭

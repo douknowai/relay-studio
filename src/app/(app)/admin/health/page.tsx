@@ -54,7 +54,7 @@ export default function AdminHealthPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-3xl">
-      <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4 md:mb-6">服务健康状态</h1>
+      <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A] mb-4 md:mb-6">服务健康状态</h1>
 
       {isLoading ? (
         <PageSkeleton rows={4} />

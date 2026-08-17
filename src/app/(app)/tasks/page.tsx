@@ -146,9 +146,9 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
-        <h1 className="text-lg font-semibold text-[var(--color-text)]">任务列表</h1>
+        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">任务列表</h1>
         <div className="flex items-center gap-2">
           {hasActiveTasks && autoRefresh && (
             <span className="text-xs text-[var(--color-text-subtle)] animate-pulse motion-reduce:animate-none" aria-hidden="true">

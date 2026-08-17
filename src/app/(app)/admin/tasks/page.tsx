@@ -107,8 +107,8 @@ export default function AdminTasksPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
-      <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4 md:mb-6">任务管理</h1>
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
+      <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A] mb-4 md:mb-6">任务管理</h1>
 
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}

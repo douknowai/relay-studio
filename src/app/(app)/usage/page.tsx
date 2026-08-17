@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
 import { PageSkeleton, ErrorState, EmptyState } from '@/components/loading-states';
+import { ConsolePage, ConsoleSection, ConsoleRow, CONSOLE_TOKENS } from '@/components/console';
 
 interface CategoryQuota {
   daily_limit: number;
@@ -26,6 +27,37 @@ interface UsageData {
     image_count?: number;
     video_count?: number;
   }>;
+}
+
+function QuotaBar({ used, limit }: { used: number; limit: number }) {
+  const percent = limit > 0 ? Math.min(Math.round((used / limit) * 100), 100) : 0;
+  const danger = limit > 0 && used >= limit;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+      <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', color: 'rgba(26,26,26,0.85)', flexShrink: 0 }}>
+        {used} / {limit}
+      </span>
+      <div style={{
+        width: 96,
+        height: 4,
+        flexShrink: 0,
+        borderRadius: 999,
+        background: 'rgba(26,26,26,0.08)',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          width: `${percent}%`,
+          height: '100%',
+          borderRadius: 999,
+          background: danger ? '#B42318' : CONSOLE_TOKENS.accent,
+          transition: 'width 300ms ease-out',
+        }} />
+      </div>
+      <span style={{ fontSize: 11, color: 'rgba(26,26,26,0.45)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+        {percent}%
+      </span>
+    </div>
+  );
 }
 
 export default function UsagePage() {
@@ -75,191 +107,162 @@ export default function UsagePage() {
   const { quota, recent_usage } = usage;
   const image_usage = quota.image;
   const video_usage = quota.video;
-  const totalDailyUsed = image_usage.daily_used + video_usage.daily_used;
-  const totalDailyLimit = image_usage.daily_limit + video_usage.daily_limit;
-  const totalMonthlyUsed = image_usage.monthly_used + video_usage.monthly_used;
-  const totalMonthlyLimit = image_usage.monthly_limit + video_usage.monthly_limit;
-  const dailyPercent = totalDailyLimit > 0 ? Math.round((totalDailyUsed / totalDailyLimit) * 100) : 0;
-  const monthlyPercent = totalMonthlyLimit > 0 ? Math.round((totalMonthlyUsed / totalMonthlyLimit) * 100) : 0;
-
-  const hasImageUsage = image_usage.daily_limit > 0 || image_usage.daily_used > 0;
-  const hasVideoUsage = video_usage.daily_limit > 0 || video_usage.daily_used > 0;
-  const hasCategoryData = hasImageUsage || hasVideoUsage;
 
   const maxRecentCount = Math.max(...(recent_usage?.map(r => r.count) || [1]), 1);
+  const hasCategorySplit = recent_usage?.some(r => r.image_count !== undefined && r.video_count !== undefined);
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl">
-      <h1 className="text-lg font-semibold text-[var(--color-text)] mb-4 md:mb-6">使用量</h1>
-
+    <ConsolePage title="使用量" description="生成额度与近期使用统计">
       {!usage.generation_enabled && (
-        <div className="mb-4 p-3 bg-[var(--color-warning-subtle)] border border-[var(--color-warning)]/20 rounded-[var(--radius-md)] text-xs text-[var(--color-warning)]">
-          生成服务暂时关闭
+        <div style={{
+          marginBottom: 20,
+          padding: '10px 14px',
+          borderRadius: 8,
+          border: '1px solid rgba(217,119,6,0.25)',
+          background: 'rgba(217,119,6,0.06)',
+          color: '#B45309',
+          fontSize: 13,
+          lineHeight: '20px',
+        }}>
+          生成服务暂时关闭，请联系管理员。
         </div>
       )}
 
-      {/* Category-specific Quota Cards */}
-      {hasCategoryData ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-6">
-          {/* Image Usage */}
-          {hasImageUsage && (
-            <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 rounded-full bg-blue-400" />
-                <span className="text-xs font-medium text-[var(--color-text-muted)]">图像额度</span>
-              </div>
-              <div className="space-y-2">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-[var(--color-text-subtle)]">今日</span>
-                    <span className="text-xs text-[var(--color-text)]">{image_usage.daily_used} / {image_usage.daily_limit}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(image_usage.daily_limit > 0 ? (image_usage.daily_used / image_usage.daily_limit) * 100 : 0, 100)}%` }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-[var(--color-text-subtle)]">本月</span>
-                    <span className="text-xs text-[var(--color-text)]">{image_usage.monthly_used} / {image_usage.monthly_limit}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(image_usage.monthly_limit > 0 ? (image_usage.monthly_used / image_usage.monthly_limit) * 100 : 0, 100)}%` }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+      <ConsoleSection title="生成额度">
+        <ConsoleRow
+          meta={{ label: '图像 · 今日', description: '当日图像生成消耗与上限' }}
+        >
+          <QuotaBar used={image_usage.daily_used} limit={image_usage.daily_limit} />
+        </ConsoleRow>
+        <ConsoleRow
+          meta={{ label: '图像 · 本月', description: '当月图像生成累计与上限' }}
+        >
+          <QuotaBar used={image_usage.monthly_used} limit={image_usage.monthly_limit} />
+        </ConsoleRow>
+        <ConsoleRow
+          meta={{ label: '视频 · 今日', description: '当日视频生成消耗与上限' }}
+        >
+          <QuotaBar used={video_usage.daily_used} limit={video_usage.daily_limit} />
+        </ConsoleRow>
+        <ConsoleRow
+          meta={{ label: '视频 · 本月', description: '当月视频生成累计与上限' }}
+          isLast
+        >
+          <QuotaBar used={video_usage.monthly_used} limit={video_usage.monthly_limit} />
+        </ConsoleRow>
+      </ConsoleSection>
 
-          {/* Video Usage */}
-          {hasVideoUsage && (
-            <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 rounded-full bg-purple-400" />
-                <span className="text-xs font-medium text-[var(--color-text-muted)]">视频额度</span>
-              </div>
-              <div className="space-y-2">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-[var(--color-text-subtle)]">今日</span>
-                    <span className="text-xs text-[var(--color-text)]">{video_usage.daily_used} / {video_usage.daily_limit}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-400 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(video_usage.daily_limit > 0 ? (video_usage.daily_used / video_usage.daily_limit) * 100 : 0, 100)}%` }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-[var(--color-text-subtle)]">本月</span>
-                    <span className="text-xs text-[var(--color-text)]">{video_usage.monthly_used} / {video_usage.monthly_limit}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-400 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(video_usage.monthly_limit > 0 ? (video_usage.monthly_used / video_usage.monthly_limit) * 100 : 0, 100)}%` }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Fallback: total quota cards when no category data */
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-6">
-          <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-[var(--color-text-muted)]">今日额度</span>
-              <span className="text-xs text-[var(--color-text)]">{totalDailyUsed} / {totalDailyLimit}</span>
-            </div>
-            <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-              <div className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(dailyPercent, 100)}%` }} />
-            </div>
-            <div className="mt-1.5 text-[10px] text-[var(--color-text-subtle)]">{dailyPercent}% 已使用</div>
-          </div>
-          <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-[var(--color-text-muted)]">本月额度</span>
-              <span className="text-xs text-[var(--color-text)]">{totalMonthlyUsed} / {totalMonthlyLimit}</span>
-            </div>
-            <div className="w-full h-2 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden">
-              <div className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(monthlyPercent, 100)}%` }} />
-            </div>
-            <div className="mt-1.5 text-[10px] text-[var(--color-text-subtle)]">{monthlyPercent}% 已使用</div>
-          </div>
-        </div>
-      )}
-
-      {/* Concurrent */}
-      <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)] mb-6">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-[var(--color-text-muted)]">当前并发</span>
-          <span className="text-sm text-[var(--color-text)]">
+      <ConsoleSection title="并发">
+        <ConsoleRow label="当前并发任务" isLast>
+          <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
             {quota.current_concurrent} / {quota.max_concurrent}
           </span>
-        </div>
-      </div>
+        </ConsoleRow>
+      </ConsoleSection>
 
-      {/* Recent Usage Chart */}
       {recent_usage && recent_usage.length > 0 && (
-        <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-medium text-[var(--color-text-muted)]">近 {trendDays} 天使用趋势</h2>
-            <div className="flex items-center gap-0.5 p-0.5 rounded-md border border-[var(--color-border)]">
+        <ConsoleSection
+          title={`近 ${trendDays} 天使用趋势`}
+          action={
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 2,
+              padding: 2,
+              borderRadius: 8,
+              border: '1px solid rgba(26,26,26,0.14)',
+            }}>
               {([7, 30] as const).map((d) => (
                 <button
                   key={d}
                   onClick={() => setTrendDays(d)}
                   disabled={trendDays === d}
-                  className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
-                    trendDays === d
-                      ? 'bg-[var(--color-accent)] text-white'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-                  }`}
+                  style={{
+                    padding: '3px 10px',
+                    fontSize: 12,
+                    lineHeight: '16px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: trendDays === d ? 'default' : 'pointer',
+                    background: trendDays === d ? '#1A1A1A' : 'transparent',
+                    color: trendDays === d ? '#FFFFFF' : 'rgba(26,26,26,0.55)',
+                    transition: 'all 160ms ease-out',
+                  }}
                 >
                   {d}天
                 </button>
               ))}
             </div>
-          </div>
-          <div className="flex items-end gap-1.5 md:gap-2 h-28 md:h-32">
-            {recent_usage.map((item, idx) => (
-              <div key={item.date} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-[10px] text-[var(--color-text-subtle)]">{item.count}</span>
-                <div className="w-full flex flex-col gap-0.5" style={{ height: `${Math.max((item.count / maxRecentCount) * 80, 4)}px`, justifyContent: 'flex-end' }}>
-                  {item.image_count !== undefined && item.video_count !== undefined ? (
-                    <>
-                      <div className="w-full bg-blue-400/70 rounded-t-sm" style={{ height: `${Math.max((item.image_count / maxRecentCount) * 80, item.image_count > 0 ? 2 : 0)}px` }} />
-                      <div className="w-full bg-purple-400/70 rounded-b-sm" style={{ height: `${Math.max((item.video_count / maxRecentCount) * 80, item.video_count > 0 ? 2 : 0)}px` }} />
-                    </>
-                  ) : (
-                    <div className="w-full bg-[var(--color-accent)]/70 rounded-t-sm min-h-[4px] transition-all duration-300"
-                      style={{ height: '100%' }} />
+          }
+        >
+          <div style={{ padding: '20px 24px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 128 }}>
+              {recent_usage.map((item, idx) => (
+                <div key={item.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                  {item.count > 0 && (
+                    <span style={{ fontSize: 10, color: 'rgba(26,26,26,0.45)', fontVariantNumeric: 'tabular-nums' }}>
+                      {item.count}
+                    </span>
                   )}
+                  <div style={{
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                    justifyContent: 'flex-end',
+                    height: Math.max((item.count / maxRecentCount) * 80, 3),
+                  }}>
+                    {item.image_count !== undefined && item.video_count !== undefined ? (
+                      <>
+                        <div style={{
+                          width: '100%',
+                          height: Math.max((item.image_count / maxRecentCount) * 80, item.image_count > 0 ? 2 : 0),
+                          borderRadius: '3px 3px 0 0',
+                          background: CONSOLE_TOKENS.accent,
+                          opacity: 0.85,
+                        }} />
+                        <div style={{
+                          width: '100%',
+                          height: Math.max((item.video_count / maxRecentCount) * 80, item.video_count > 0 ? 2 : 0),
+                          borderRadius: '0 0 3px 3px',
+                          background: 'rgba(26,26,26,0.55)',
+                          opacity: 0.8,
+                        }} />
+                      </>
+                    ) : (
+                      <div style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: 3,
+                        background: CONSOLE_TOKENS.accent,
+                        opacity: 0.85,
+                        transition: 'height 300ms ease-out',
+                      }} />
+                    )}
+                  </div>
+                  <span style={{ fontSize: 9, color: 'rgba(26,26,26,0.4)', whiteSpace: 'nowrap' }}>
+                    {trendDays === 30 && idx % 5 !== 0 && idx !== recent_usage.length - 1
+                      ? ''
+                      : new Date(item.date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
+                  </span>
                 </div>
-                <span className="text-[9px] md:text-[10px] text-[var(--color-text-subtle)]">
-                  {trendDays === 30 && idx % 5 !== 0 && idx !== recent_usage.length - 1
-                    ? ' '
-                    : new Date(item.date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
+              ))}
+            </div>
+            {hasCategorySplit && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(26,26,26,0.5)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: CONSOLE_TOKENS.accent }} />
+                  图像
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(26,26,26,0.5)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(26,26,26,0.55)' }} />
+                  视频
                 </span>
               </div>
-            ))}
+            )}
           </div>
-          {hasCategoryData && (
-            <div className="flex items-center gap-4 mt-2">
-              <span className="flex items-center gap-1 text-[10px] text-[var(--color-text-subtle)]">
-                <span className="w-2 h-2 rounded-sm bg-blue-400/70" />图像
-              </span>
-              <span className="flex items-center gap-1 text-[10px] text-[var(--color-text-subtle)]">
-                <span className="w-2 h-2 rounded-sm bg-purple-400/70" />视频
-              </span>
-            </div>
-          )}
-        </div>
+        </ConsoleSection>
       )}
-    </div>
+    </ConsolePage>
   );
 }
