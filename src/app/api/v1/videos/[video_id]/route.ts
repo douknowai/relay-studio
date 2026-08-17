@@ -38,7 +38,21 @@ export async function GET(
       }
     } catch { /* ignore */ }
 
-    return successResponse({ ...data, url, thumbnail_url: thumbnailUrl }, auth.requestId);
+    // Resolve prompt from parent task (generation_assets has no prompt column)
+    let prompt = '';
+    if (data.task_id) {
+      const { data: task } = await supabase
+        .from('generation_tasks')
+        .select('request_payload')
+        .eq('id', data.task_id as string)
+        .single();
+      const taskPrompt = (task?.request_payload as Record<string, unknown> | null)?.prompt;
+      if (typeof taskPrompt === 'string' && taskPrompt.length > 0) {
+        prompt = taskPrompt;
+      }
+    }
+
+    return successResponse({ ...data, url, thumbnail_url: thumbnailUrl, prompt }, auth.requestId);
   } catch (err) {
     return errorResponse(err, '');
   }

@@ -115,9 +115,11 @@ export function ErrorState({
 export function EmptyState({
   message = '暂无数据',
   icon,
+  action,
 }: {
   message?: string;
   icon?: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -127,6 +129,7 @@ export function EmptyState({
         </svg>
       )}
       <p className="text-sm text-[var(--color-text-subtle)]">{message}</p>
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }

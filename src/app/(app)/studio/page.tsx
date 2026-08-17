@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
+import { copyToClipboard } from '@/lib/clipboard';
 import { ModelConfig, TaskStatus } from '@/types';
 import type { VideoCapabilityMetadata } from '@/types';
 
@@ -91,6 +93,31 @@ export default function StudioPage() {
   const [lastFrameFile, setLastFrameFile] = useState<File | null>(null);
   const [lastFramePreview, setLastFramePreview] = useState<string | null>(null);
   const [lastFrameAssetId, setLastFrameAssetId] = useState<string | null>(null);
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [lastGenSnapshot, setLastGenSnapshot] = useState<{
+    mediaMode: 'image' | 'video';
+    prompt: string;
+    selectedModelCode: string;
+    taskType: 'text_to_image' | 'image_to_image' | 'text_to_video' | 'image_to_video' | 'first_last_frame';
+    videoTaskType: 'text_to_video' | 'image_to_video' | 'first_last_frame';
+    size: string;
+    imageCount: number;
+    visibleWatermark: boolean;
+    videoDuration: number;
+    videoResolution: string;
+    videoRatio: string;
+    generateAudio: boolean;
+    referenceFiles: File[];
+    referencePreviews: string[];
+    referenceVideoFiles: File[];
+    referenceAudioFiles: File[];
+    firstFrameFile: File | null;
+    firstFramePreview: string | null;
+    lastFrameFile: File | null;
+    lastFramePreview: string | null;
+  } | null>(null);
+  const regenerateRef = useRef(false);
 
   const selectedModel = models.find(m => m.code === selectedModelCode);
 
@@ -417,6 +444,30 @@ export default function StudioPage() {
       return;
     }
 
+    // Snapshot params for "regenerate with same settings"
+    setLastGenSnapshot({
+      mediaMode,
+      prompt,
+      selectedModelCode,
+      taskType,
+      videoTaskType,
+      size,
+      imageCount,
+      visibleWatermark,
+      videoDuration,
+      videoResolution,
+      videoRatio,
+      generateAudio,
+      referenceFiles,
+      referencePreviews,
+      referenceVideoFiles,
+      referenceAudioFiles,
+      firstFrameFile,
+      firstFramePreview,
+      lastFrameFile,
+      lastFramePreview,
+    });
+
     setIsGenerating(true);
     setError(null);
     setTaskStatus('queued');
@@ -527,6 +578,77 @@ export default function StudioPage() {
       toast.error('重试失败：' + msg);
       setIsGenerating(false);
       setTaskStatus(null);
+    }
+  };
+
+  // Run generation once after state restore from snapshot
+  useEffect(() => {
+    if (!regenerateRef.current) return;
+    regenerateRef.current = false;
+    void handleGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  const handleRegenerate = () => {
+    if (!lastGenSnapshot || isGenerating) return;
+    const s = lastGenSnapshot;
+    setMediaMode(s.mediaMode);
+    setPrompt(s.prompt);
+    setSelectedModelCode(s.selectedModelCode);
+    setTaskType(s.taskType);
+    setVideoTaskType(s.videoTaskType);
+    setSize(s.size);
+    setImageCount(s.imageCount);
+    setVisibleWatermark(s.visibleWatermark);
+    setVideoDuration(s.videoDuration);
+    setVideoResolution(s.videoResolution);
+    setVideoRatio(s.videoRatio);
+    setGenerateAudio(s.generateAudio);
+    setReferenceFiles(s.referenceFiles);
+    setReferencePreviews(s.referencePreviews);
+    setReferenceVideoFiles(s.referenceVideoFiles);
+    setReferenceAudioFiles(s.referenceAudioFiles);
+    setFirstFrameFile(s.firstFrameFile);
+    setFirstFramePreview(s.firstFramePreview);
+    setLastFrameFile(s.lastFrameFile);
+    setLastFramePreview(s.lastFramePreview);
+    setGeneratedImages([]);
+    setCurrentVideoUrl(null);
+    setError(null);
+    regenerateRef.current = true;
+  };
+
+  const handleClearForm = () => {
+    setPrompt('');
+    setReferenceFiles([]);
+    setReferencePreviews([]);
+    setReferenceVideoFiles([]);
+    setReferenceAudioFiles([]);
+    setFirstFrameFile(null);
+    setFirstFramePreview(null);
+    setFirstFrameAssetId(null);
+    setLastFrameFile(null);
+    setLastFramePreview(null);
+    setLastFrameAssetId(null);
+    setGeneratedImages([]);
+    setCurrentVideoUrl(null);
+    setCurrentTaskId(null);
+    setError(null);
+    const current = [...imageModels, ...videoModels].find(m => m.code === selectedModelCode);
+    if (current) applyModelDefaults(current);
+    toast.success('表单已清空');
+  };
+
+  const handleCopyPrompt = async (text?: string) => {
+    const value = (text ?? prompt).trim();
+    if (!value) return;
+    const ok = await copyToClipboard(value);
+    if (ok) {
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 1600);
+      toast.success('Prompt 已复制');
+    } else {
+      toast.error('复制失败，请手动选择复制');
     }
   };
 

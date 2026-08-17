@@ -53,6 +53,28 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query;
     if (error) return errorResponse(new Error('获取视频失败'), auth.requestId);
 
+    // Resolve prompts from parent tasks (generation_assets has no prompt column)
+    const taskIds = [
+      ...new Set(
+        (data || [])
+          .map((asset: Record<string, unknown>) => asset.task_id as string)
+          .filter(Boolean)
+      ),
+    ];
+    const taskPromptMap = new Map<string, string>();
+    if (taskIds.length > 0) {
+      const { data: tasks } = await supabase
+        .from('generation_tasks')
+        .select('id, request_payload')
+        .in('id', taskIds);
+      (tasks || []).forEach((task: { id: string; request_payload: Record<string, unknown> | null }) => {
+        const prompt = task.request_payload?.prompt;
+        if (typeof prompt === 'string' && prompt.length > 0) {
+          taskPromptMap.set(task.id, prompt);
+        }
+      });
+    }
+
     // Generate signed URLs for each asset
     const storage = createStorageClient();
 
@@ -69,7 +91,12 @@ export async function GET(request: NextRequest) {
           }
         } catch { /* ignore signed URL errors */ }
 
-        return { ...asset, url, thumbnail_url: thumbnailUrl };
+        return {
+          ...asset,
+          url,
+          thumbnail_url: thumbnailUrl,
+          prompt: taskPromptMap.get(asset.task_id as string) || '',
+        };
       })
     );
 
