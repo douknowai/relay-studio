@@ -167,6 +167,8 @@ export interface GenerationAsset {
   provider_metadata: Record<string, unknown> | null;
   ai_generated: boolean;
   visible_watermark_disabled: boolean;
+  /** Resolved from the parent task's request_payload by list endpoints. */
+  prompt?: string;
   favorite: boolean;
   media_type: MediaType;
   duration: number | null;

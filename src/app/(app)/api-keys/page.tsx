@@ -13,6 +13,7 @@ interface ApiKey {
   scopes: string[];
   created_at: string;
   last_used_at: string | null;
+  expires_at?: string | null;
   is_active: boolean;
 }
 
@@ -142,6 +143,7 @@ export default function ApiKeysPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyScopes, setNewKeyScopes] = useState<string[]>(DEFAULT_NEW_KEY_SCOPES);
+  const [newKeyExpiryDays, setNewKeyExpiryDays] = useState(0);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -188,6 +190,9 @@ export default function ApiKeysPage() {
       return;
     }
     setError(null);
+    const expiresAt = newKeyExpiryDays > 0
+      ? new Date(Date.now() + newKeyExpiryDays * 24 * 60 * 60 * 1000).toISOString()
+      : undefined;
     try {
       const res = await fetchWithTimeout('/api/v1/api-keys', {
         method: 'POST',
@@ -195,7 +200,7 @@ export default function ApiKeysPage() {
           'Content-Type': 'application/json',
           'x-session': session?.access_token || '',
         },
-        body: JSON.stringify({ name: newKeyName.trim(), scopes: newKeyScopes }),
+        body: JSON.stringify({ name: newKeyName.trim(), scopes: newKeyScopes, expires_at: expiresAt }),
         timeout: 8_000,
       });
       if (res.ok) {
@@ -395,6 +400,26 @@ export default function ApiKeysPage() {
                 />
 
                 <div className="mt-4">
+                  <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1.5">有效期</label>
+                  <div className="flex items-center gap-1.5 p-0.5 border border-[var(--color-border)] rounded-[var(--radius-md)] w-fit">
+                    {([0, 7, 30, 90] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setNewKeyExpiryDays(d)}
+                        className={`px-2.5 py-1 text-[11px] rounded-[var(--radius-sm)] transition-colors ${
+                          newKeyExpiryDays === d
+                            ? 'bg-[var(--color-accent)] text-white'
+                            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+                        }`}
+                      >
+                        {d === 0 ? '永久' : `${d} 天`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-medium text-[var(--color-text-muted)]">权限范围</label>
                     <span className="text-[10px] text-[var(--color-text-subtle)]">
@@ -487,6 +512,15 @@ export default function ApiKeysPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-[var(--color-text-subtle)]">
                     创建于 {new Date(key.created_at).toLocaleDateString('zh-CN')}
+                    {key.expires_at && (
+                      <span className={
+                        new Date(key.expires_at) < new Date()
+                          ? 'text-[var(--color-destructive)] ml-1'
+                          : 'ml-1'
+                      }>
+                        · {new Date(key.expires_at) < new Date() ? '已过期' : '过期于'} {new Date(key.expires_at).toLocaleDateString('zh-CN')}
+                      </span>
+                    )}
                   </span>
                   <div className="flex gap-2">
                     <button

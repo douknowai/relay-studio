@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
@@ -11,6 +12,8 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState(originalName);
   const [savedName, setSavedName] = useState(originalName);
   const [isSaving, setIsSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const isDirty = useMemo(() => displayName.trim() !== savedName.trim(), [displayName, savedName]);
 
@@ -42,6 +45,29 @@ export default function SettingsPage() {
 
   const handleCancel = () => {
     setDisplayName(savedName);
+  };
+
+  const handleUpdatePassword = async () => {
+    const trimmed = newPassword.trim();
+    if (trimmed.length < 8) {
+      toast.error('密码至少需要 8 位');
+      return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.updateUser({ password: trimmed });
+      if (error) {
+        toast.error(error.message || '密码更新失败');
+      } else {
+        setNewPassword('');
+        toast.success('密码已更新');
+      }
+    } catch {
+      toast.error('请求失败');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   return (
@@ -118,6 +144,73 @@ export default function SettingsPage() {
                 <div style={{ height: '36px', width: '220px', maxWidth: '100%', padding: '0 12px', border: '1px solid rgba(26,26,26,0.08)', borderRadius: '8px', fontSize: '13px', lineHeight: '36px', color: 'rgba(26,26,26,0.5)', background: '#FAFAFA', boxSizing: 'border-box' }}>
                   {profile?.role === 'admin' ? '管理员' : '用户'}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Security Section */}
+        <div style={{ marginTop: '32px' }}>
+          <h2 style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: '#1A1A1A', marginBottom: '12px' }}>
+            安全
+          </h2>
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid rgba(26,26,26,0.08)',
+            borderRadius: '12px',
+            overflow: 'hidden',
+          }}>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4" style={{ padding: '14px 20px' }}>
+              <div className="flex-1 md:min-w-[240px]" style={{ minWidth: '0' }}>
+                <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 600, color: '#1A1A1A' }}>修改密码</div>
+                <div style={{ fontSize: '13px', lineHeight: '18px', color: 'rgba(26,26,26,0.58)', marginTop: '2px' }}>至少 8 位，更新后当前登录保持有效</div>
+              </div>
+              <div className="flex w-full items-center gap-2 md:w-[220px] md:shrink-0">
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="输入新密码"
+                  autoComplete="new-password"
+                  style={{
+                    height: '36px',
+                    flex: 1,
+                    minWidth: '0',
+                    padding: '0 12px',
+                    border: '1px solid rgba(26,26,26,0.14)',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    color: '#1A1A1A',
+                    background: '#FFFFFF',
+                    outline: 'none',
+                    transition: 'border-color 160ms ease-out, box-shadow 160ms ease-out',
+                    boxSizing: 'border-box',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#006699'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,102,153,0.1)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(26,26,26,0.14)'; e.currentTarget.style.boxShadow = 'none'; }}
+                />
+                <button
+                  type="button"
+                  onClick={handleUpdatePassword}
+                  disabled={isUpdatingPassword || newPassword.trim().length < 8}
+                  style={{
+                    height: '36px',
+                    padding: '0 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#1A1A1A',
+                    color: '#FFFFFF',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    cursor: isUpdatingPassword || newPassword.trim().length < 8 ? 'not-allowed' : 'pointer',
+                    opacity: isUpdatingPassword || newPassword.trim().length < 8 ? 0.5 : 1,
+                    flexShrink: 0,
+                  }}
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                >
+                  {isUpdatingPassword ? '更新中...' : '更新'}
+                </button>
               </div>
             </div>
           </div>

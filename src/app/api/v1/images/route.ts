@@ -53,6 +53,22 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query;
     if (error) return errorResponse(new Error('获取图片失败'), auth.requestId);
 
+    // Resolve prompts from parent tasks (generation_assets has no prompt column)
+    const taskIds = [...new Set((data || []).map((a: Record<string, unknown>) => a.task_id).filter(Boolean))];
+    const taskPromptMap = new Map<string, string>();
+    if (taskIds.length > 0) {
+      const { data: tasks } = await supabase
+        .from('generation_tasks')
+        .select('id, request_payload')
+        .in('id', taskIds);
+      for (const task of tasks || []) {
+        const taskPrompt = (task.request_payload as Record<string, unknown> | null)?.prompt;
+        if (typeof taskPrompt === 'string' && taskPrompt.length > 0) {
+          taskPromptMap.set(task.id, taskPrompt);
+        }
+      }
+    }
+
     // Generate signed URLs for each asset
     const storage = createStorageClient();
 
@@ -69,7 +85,7 @@ export async function GET(request: NextRequest) {
           }
         } catch { /* ignore signed URL errors */ }
 
-        return { ...asset, url, thumbnail_url: thumbnailUrl };
+        return { ...asset, url, thumbnail_url: thumbnailUrl, prompt: taskPromptMap.get(asset.task_id as string) || '' };
       })
     );
 

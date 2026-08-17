@@ -122,16 +122,18 @@ export async function GET(request: NextRequest) {
       .eq('key', 'generation_enabled')
       .single();
 
-    // Recent 7-day usage trend (succeeded only)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    // Recent usage trend (succeeded only), ?days=7|30 (default 7)
+    const rawDays = Number.parseInt(request.nextUrl.searchParams.get('days') || '7', 10);
+    const days = rawDays === 30 ? 30 : 7;
+    const daysAgo = new Date();
+    daysAgo.setHours(0, 0, 0, 0);
+    daysAgo.setDate(daysAgo.getDate() - (days - 1));
     const { data: recentRecords } = await supabase
       .from('usage_records')
       .select('model_config_id, created_at')
       .eq('user_id', auth.userId)
       .eq('status', 'succeeded')
-      .gte('created_at', sevenDaysAgo.toISOString());
+      .gte('created_at', daysAgo.toISOString());
 
     const recentModelIds = [...new Set((recentRecords || []).map((r: { model_config_id: string }) => r.model_config_id))];
     const { data: recentModelConfigs } = recentModelIds.length > 0
@@ -142,7 +144,7 @@ export async function GET(request: NextRequest) {
     );
 
     const dayBuckets = new Map<string, { image_count: number; video_count: number }>();
-    for (let i = 6; i >= 0; i--) {
+    for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);

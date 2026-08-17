@@ -120,6 +120,18 @@ export default function StudioPage() {
   const regenerateRef = useRef(false);
 
   const selectedModel = models.find(m => m.code === selectedModelCode);
+  // Snapshot of the prompt from the last successful submit — used by result actions.
+  const lastSubmitPrompt = lastGenSnapshot?.prompt;
+
+  const handleCopyText = async (text?: string) => {
+    if (!text) return;
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      toast.success('已复制');
+    } else {
+      toast.error('复制失败，请手动选择复制');
+    }
+  };
 
   // Video capabilities derived from selected model.
   const videoMeta = selectedModel?.capability_metadata as VideoCapabilityMetadata | undefined;
@@ -613,7 +625,7 @@ export default function StudioPage() {
     setLastFrameFile(s.lastFrameFile);
     setLastFramePreview(s.lastFramePreview);
     setGeneratedImages([]);
-    setCurrentVideoUrl(null);
+    setGeneratedVideos([]);
     setError(null);
     regenerateRef.current = true;
   };
@@ -631,10 +643,10 @@ export default function StudioPage() {
     setLastFramePreview(null);
     setLastFrameAssetId(null);
     setGeneratedImages([]);
-    setCurrentVideoUrl(null);
+    setGeneratedVideos([]);
     setCurrentTaskId(null);
     setError(null);
-    const current = [...imageModels, ...videoModels].find(m => m.code === selectedModelCode);
+    const current = models.find(m => m.code === selectedModelCode);
     if (current) applyModelDefaults(current);
     toast.success('表单已清空');
   };
@@ -801,7 +813,25 @@ export default function StudioPage() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-medium text-[var(--color-text-muted)]">Prompt</label>
-              <span className="text-[10px] text-[var(--color-text-subtle)]">{prompt.length} 字</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-[var(--color-text-subtle)]">{prompt.length} 字</span>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyPrompt()}
+                  disabled={!prompt.trim()}
+                  className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                >
+                  {promptCopied ? '已复制' : '复制'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearForm}
+                  disabled={isGenerating}
+                  className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                >
+                  清空表单
+                </button>
+              </div>
             </div>
             <textarea
               value={prompt}
@@ -813,6 +843,32 @@ export default function StudioPage() {
             <p className="mt-1 text-[10px] text-[var(--color-text-subtle)]">
               生成内容应遵守相关法律法规
             </p>
+            {prompt.trim() === '' && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {(mediaMode === 'video'
+                  ? [
+                      '一只橘猫在窗台上晒太阳，镜头缓慢推近，暖色调',
+                      '城市夜景延时摄影，车流光轨穿梭，电影感',
+                      '海浪拍打沙滩特写，慢动作，自然光',
+                    ]
+                  : [
+                      '一只橘猫趴在窗台晒太阳，午后暖光，胶片质感',
+                      '极简主义静物摄影，陶瓷花瓶与干花，柔和侧光',
+                      '赛博朋克风格城市街景，雨夜霓虹反射，广角',
+                    ]
+                ).map(example => (
+                  <button
+                    key={example}
+                    type="button"
+                    onClick={() => setPrompt(example)}
+                    className="max-w-full truncate px-2 py-0.5 text-[10px] text-[var(--color-text-muted)] bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-full hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors"
+                    title={example}
+                  >
+                    {example.slice(0, 14)}…
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Reference Images (for image-to-image / image-to-video / first_last_frame) */}
@@ -1138,12 +1194,25 @@ export default function StudioPage() {
           {error && (
             <div className="mb-4 p-3 bg-[var(--color-destructive-subtle)] border border-[var(--color-destructive)]/20 rounded-[var(--radius-md)]">
               <p className="text-sm text-[var(--color-destructive)]">{error}</p>
-              <button
-                onClick={handleRetry}
-                className="mt-2 text-xs text-[var(--color-accent)] hover:underline"
-              >
-                重试
-              </button>
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  onClick={handleRetry}
+                  className="text-xs text-[var(--color-accent)] hover:underline"
+                >
+                  重试
+                </button>
+                <button
+                  onClick={() => void handleCopyText(error)}
+                  className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                >
+                  复制错误信息
+                </button>
+                {currentTaskId && (
+                  <Link href={`/tasks?task_id=${currentTaskId}`} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                    查看任务
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 
@@ -1153,6 +1222,14 @@ export default function StudioPage() {
               <p className="text-sm text-[var(--color-text-muted)]">
                 {taskStatus === 'queued' ? '任务排队中...' : mediaMode === 'video' ? '正在生成视频...' : '正在生成图片...'}
               </p>
+              {mediaMode === 'video' && currentTaskId && (
+                <Link
+                  href={`/tasks?task_id=${currentTaskId}`}
+                  className="mt-3 text-xs text-[var(--color-accent)] hover:underline"
+                >
+                  查看任务进度 →
+                </Link>
+              )}
             </div>
           )}
 
@@ -1173,12 +1250,29 @@ export default function StudioPage() {
                   />
                   <div className="flex items-center justify-between px-3 py-2 bg-[var(--color-surface)] border-t border-[var(--color-border)]">
                     <span className="text-[10px] text-[var(--color-text-subtle)]">AI 生成视频</span>
-                    <button
-                      onClick={() => downloadFile(video.url, `video-${video.id}.mp4`)}
-                      className="px-2.5 py-1 text-xs bg-[var(--color-text)] text-white rounded-[var(--radius-sm)] hover:opacity-80 tap-target"
-                    >
-                      下载
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {lastSubmitPrompt && (
+                        <button
+                          onClick={() => void handleCopyText(lastSubmitPrompt)}
+                          className="px-2 py-1 text-xs text-[var(--color-text-muted)] border border-[var(--color-border)] rounded-[var(--radius-sm)] hover:text-[var(--color-text)] hover:border-[var(--color-text-muted)] tap-target"
+                        >
+                          复制
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRegenerate()}
+                        disabled={isGenerating}
+                        className="px-2 py-1 text-xs text-[var(--color-text-muted)] border border-[var(--color-border)] rounded-[var(--radius-sm)] hover:text-[var(--color-text)] hover:border-[var(--color-text-muted)] disabled:opacity-40 tap-target"
+                      >
+                        再次生成
+                      </button>
+                      <button
+                        onClick={() => downloadFile(video.url, `video-${video.id}.mp4`)}
+                        className="px-2.5 py-1 text-xs bg-[var(--color-text)] text-white rounded-[var(--radius-sm)] hover:opacity-80 tap-target"
+                      >
+                        下载
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1197,22 +1291,43 @@ export default function StudioPage() {
                   />
                   {/* Mobile: always show actions, Desktop: hover only */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-center gap-1.5 px-2">
+                      <button
+                        onClick={() => setZoomImage(img.url)}
+                        className="px-2.5 py-1 md:px-2 md:py-0.5 text-xs bg-white text-[var(--color-text)] rounded-[var(--radius-sm)] hover:bg-gray-100 tap-target"
+                      >
+                        放大
+                      </button>
                       <button
                         onClick={() => downloadFile(img.url, `image-${img.id}.png`)}
-                        className="px-3 py-1.5 md:px-2.5 md:py-1 text-xs bg-white text-[var(--color-text)] rounded-[var(--radius-sm)] hover:bg-gray-100 tap-target"
+                        className="px-2.5 py-1 md:px-2 md:py-0.5 text-xs bg-white text-[var(--color-text)] rounded-[var(--radius-sm)] hover:bg-gray-100 tap-target"
                       >
                         下载
                       </button>
                       <button
                         onClick={() => toggleFavorite(img.id, img.favorite)}
-                        className={`px-3 py-1.5 md:px-2.5 md:py-1 text-xs rounded-[var(--radius-sm)] tap-target ${
+                        className={`px-2.5 py-1 md:px-2 md:py-0.5 text-xs rounded-[var(--radius-sm)] tap-target ${
                           img.favorite
                             ? 'bg-[var(--color-accent)] text-white'
                             : 'bg-white text-[var(--color-text)] hover:bg-gray-100'
                         }`}
                       >
                         {img.favorite ? '★ 已收藏' : '☆ 收藏'}
+                      </button>
+                      {lastSubmitPrompt && (
+                        <button
+                          onClick={() => void handleCopyText(lastSubmitPrompt)}
+                          className="px-2.5 py-1 md:px-2 md:py-0.5 text-xs bg-white text-[var(--color-text)] rounded-[var(--radius-sm)] hover:bg-gray-100 tap-target"
+                        >
+                          复制
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRegenerate()}
+                        disabled={isGenerating}
+                        className="px-2.5 py-1 md:px-2 md:py-0.5 text-xs bg-white text-[var(--color-text)] rounded-[var(--radius-sm)] hover:bg-gray-100 disabled:opacity-40 tap-target"
+                      >
+                        再次生成
                       </button>
                     </div>
                   </div>
@@ -1225,6 +1340,41 @@ export default function StudioPage() {
           )}
         </div>
       </div>
+
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 md:p-10"
+          onClick={() => setZoomImage(null)}
+        >
+          <div className="relative max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+            <img src={zoomImage} alt="预览大图" className="max-w-full max-h-[85vh] object-contain rounded-[var(--radius-md)]" />
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <button
+                onClick={() => void handleCopyText(zoomImage)}
+                className="px-2.5 py-1 text-xs bg-white/10 text-white rounded-[var(--radius-sm)] hover:bg-white/20 tap-target"
+              >
+                复制链接
+              </button>
+              <a
+                href={zoomImage}
+                download
+                target="_blank"
+                rel="noreferrer"
+                className="px-2.5 py-1 text-xs bg-[var(--color-text)] text-white rounded-[var(--radius-sm)] hover:opacity-80 tap-target"
+              >
+                下载原图
+              </a>
+            </div>
+            <button
+              onClick={() => setZoomImage(null)}
+              className="absolute -top-3 -right-3 w-7 h-7 bg-white text-black rounded-full text-base flex items-center justify-center shadow-md tap-target"
+              aria-label="关闭预览"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

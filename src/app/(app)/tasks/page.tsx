@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { GenerationTask, ModelConfig, TaskStatus } from '@/types';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
+import { copyToClipboard } from '@/lib/clipboard';
 import { TableSkeleton, ErrorState, EmptyState } from '@/components/loading-states';
 
 export default function TasksPage() {
@@ -19,8 +20,8 @@ export default function TasksPage() {
   const [total, setTotal] = useState(0);
   const pageSize = 20;
 
-  const fetchTasks = useCallback(async () => {
-    setIsLoading(true);
+  const fetchTasks = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
@@ -39,15 +40,38 @@ export default function TasksPage() {
         throw new Error('获取任务列表失败');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载失败');
+      if (!silent) setError(err instanceof Error ? err.message : '加载失败');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [session, page, statusFilter, modelFilter]);
 
   useEffect(() => {
     if (session) fetchTasks();
   }, [session, fetchTasks]);
+
+  // Auto-refresh while tasks are in flight (queued/running)
+  const hasActiveTasks = tasks.some((t) => t.status === 'queued' || t.status === 'running');
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  useEffect(() => {
+    if (!autoRefresh || !hasActiveTasks || !session) return;
+    const timer = setInterval(() => fetchTasks(true), 15_000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, hasActiveTasks, session, fetchTasks]);
+
+  const handleCopyError = async (task: GenerationTask) => {
+    const text = [
+      `Task ID: ${task.id}`,
+      `Status: ${task.status}`,
+      `Type: ${task.task_type}`,
+      `Model: ${String(task.request_parameters?.model ?? '未知')}`,
+      `Created: ${task.created_at}`,
+      `Error: ${task.error_message || '（无详细信息）'}`,
+    ].join('\n');
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success('错误信息已复制');
+    else toast.error('复制失败，请手动选择文本');
+  };
 
   useEffect(() => {
     async function fetchModels() {
@@ -125,7 +149,26 @@ export default function TasksPage() {
     <div className="p-4 md:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
         <h1 className="text-lg font-semibold text-[var(--color-text)]">任务列表</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {hasActiveTasks && autoRefresh && (
+            <span className="text-xs text-[var(--color-text-subtle)] animate-pulse motion-reduce:animate-none" aria-hidden="true">
+              · 每 15s 自动刷新
+            </span>
+          )}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoRefresh}
+            onClick={() => setAutoRefresh((v) => !v)}
+            disabled={!hasActiveTasks}
+            title={hasActiveTasks ? '有进行中任务时每 15 秒自动刷新' : '无进行中任务'}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs border border-[var(--color-border)] rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-40 tap-target"
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${autoRefresh && hasActiveTasks ? 'bg-[var(--color-success)]' : 'bg-[var(--color-text-subtle)]'}`}
+            />
+            自动刷新
+          </button>
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
@@ -180,12 +223,20 @@ export default function TasksPage() {
                   </span>
                   <div className="flex gap-2">
                     {task.status === 'failed' && (
-                      <button
-                        onClick={() => handleRetryTask(task.id)}
-                        className="text-xs text-[var(--color-accent)] hover:underline tap-target"
-                      >
-                        重试
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleRetryTask(task.id)}
+                          className="text-xs text-[var(--color-accent)] hover:underline tap-target"
+                        >
+                          重试
+                        </button>
+                        <button
+                          onClick={() => handleCopyError(task)}
+                          className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline tap-target"
+                        >
+                          复制错误
+                        </button>
+                      </>
                     )}
                     {task.status === 'queued' && (
                       <button
@@ -224,7 +275,10 @@ export default function TasksPage() {
                       {task.prompt}
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className={`text-xs font-medium ${statusColors[task.status]}`}>
+                      <span
+                        className={`text-xs font-medium ${statusColors[task.status]}`}
+                        title={task.status === 'failed' ? (task.error_message || '无错误详情') : undefined}
+                      >
                         {statusLabels[task.status]}
                       </span>
                     </td>
@@ -237,12 +291,20 @@ export default function TasksPage() {
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1.5">
                         {task.status === 'failed' && (
-                          <button
-                            onClick={() => handleRetryTask(task.id)}
-                            className="text-xs text-[var(--color-accent)] hover:underline"
-                          >
-                            重试
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleRetryTask(task.id)}
+                              className="text-xs text-[var(--color-accent)] hover:underline"
+                            >
+                              重试
+                            </button>
+                            <button
+                              onClick={() => handleCopyError(task)}
+                              className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline"
+                            >
+                              复制错误
+                            </button>
+                          </>
                         )}
                         {(task.status === 'queued') && (
                           <button

@@ -33,12 +33,13 @@ export default function UsagePage() {
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [trendDays, setTrendDays] = useState<7 | 30>(7);
 
-  const fetchUsage = useCallback(async () => {
+  const fetchUsage = useCallback(async (days: number = 7) => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetchWithTimeout('/api/v1/usage', {
+      const res = await fetchWithTimeout(`/api/v1/usage?days=${days}`, {
         headers: { 'x-session': session?.access_token || '' },
         timeout: 10_000,
       });
@@ -56,8 +57,8 @@ export default function UsagePage() {
   }, [session]);
 
   useEffect(() => {
-    if (session) fetchUsage();
-  }, [session, fetchUsage]);
+    if (session) fetchUsage(trendDays);
+  }, [session, fetchUsage, trendDays]);
 
   if (isLoading) {
     return <PageSkeleton rows={5} />;
@@ -205,9 +206,27 @@ export default function UsagePage() {
       {/* Recent Usage Chart */}
       {recent_usage && recent_usage.length > 0 && (
         <div className="p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-          <h2 className="text-xs font-medium text-[var(--color-text-muted)] mb-3">近 7 天使用趋势</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-medium text-[var(--color-text-muted)]">近 {trendDays} 天使用趋势</h2>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-md border border-[var(--color-border)]">
+              {([7, 30] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setTrendDays(d)}
+                  disabled={trendDays === d}
+                  className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
+                    trendDays === d
+                      ? 'bg-[var(--color-accent)] text-white'
+                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {d}天
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-end gap-1.5 md:gap-2 h-28 md:h-32">
-            {recent_usage.map((item) => (
+            {recent_usage.map((item, idx) => (
               <div key={item.date} className="flex-1 flex flex-col items-center gap-1">
                 <span className="text-[10px] text-[var(--color-text-subtle)]">{item.count}</span>
                 <div className="w-full flex flex-col gap-0.5" style={{ height: `${Math.max((item.count / maxRecentCount) * 80, 4)}px`, justifyContent: 'flex-end' }}>
@@ -222,7 +241,9 @@ export default function UsagePage() {
                   )}
                 </div>
                 <span className="text-[9px] md:text-[10px] text-[var(--color-text-subtle)]">
-                  {new Date(item.date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
+                  {trendDays === 30 && idx % 5 !== 0 && idx !== recent_usage.length - 1
+                    ? ' '
+                    : new Date(item.date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
                 </span>
               </div>
             ))}

@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { GenerationAsset, ModelConfig } from '@/types';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
+import { copyToClipboard } from '@/lib/clipboard';
+import { downloadFile } from '@/lib/download';
 import { GridSkeleton, TableSkeleton, ErrorState, EmptyState } from '@/components/loading-states';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 export default function GalleryPage() {
   const { session } = useAuth();
@@ -19,7 +23,19 @@ export default function GalleryPage() {
   const [modelFilter, setModelFilter] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchWorking, setBatchWorking] = useState(false);
   const pageSize = 24;
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+
+  const exitSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds([]);
+  }, []);
 
   const fetchAssets = useCallback(async () => {
     setIsLoading(true);
@@ -46,6 +62,48 @@ export default function GalleryPage() {
       setIsLoading(false);
     }
   }, [session, page, favoriteOnly, modelFilter]);
+
+  const batchDownload = useCallback(async () => {
+    if (selectedIds.length === 0 || batchWorking) return;
+    setBatchWorking(true);
+    try {
+      const picked = assets.filter((a) => selectedIds.includes(a.id) && (a.url || a.thumbnail_url));
+      for (const asset of picked) {
+        await downloadFile(asset.url || asset.thumbnail_url || '', `relay-image-${asset.id.slice(0, 8)}.png`);
+      }
+    } finally {
+      setBatchWorking(false);
+    }
+  }, [selectedIds, assets, batchWorking]);
+
+  const batchDelete = useCallback(async () => {
+    if (selectedIds.length === 0 || batchWorking) return;
+    if (!window.confirm(`确定删除选中的 ${selectedIds.length} 张图片？此操作不可恢复。`)) return;
+    setBatchWorking(true);
+    try {
+      await Promise.all(
+        selectedIds.map((id) =>
+          fetchWithTimeout(`/api/v1/images/${id}`, {
+            method: 'DELETE',
+            headers: { 'x-session': session?.access_token || '' },
+            timeout: 15_000,
+          }),
+        ),
+      );
+      setSelectedIds([]);
+      fetchAssets();
+    } catch {
+      setError('批量删除失败，请重试');
+    } finally {
+      setBatchWorking(false);
+    }
+  }, [selectedIds, session, fetchAssets, batchWorking]);
+
+  const copyAssetPrompt = useCallback(async (asset: GenerationAsset) => {
+    if (!asset.prompt) return;
+    const ok = await copyToClipboard(asset.prompt);
+    if (ok) toast.success('Prompt 已复制');
+  }, []);
 
   useEffect(() => {
     if (session) fetchAssets();
@@ -147,14 +205,16 @@ export default function GalleryPage() {
       ) : error ? (
         <ErrorState message={error} onRetry={fetchAssets} />
       ) : assets.length === 0 ? (
-        <EmptyState message="暂无图片" />
+        <EmptyState message={favoriteOnly || modelFilter ? '没有符合筛选条件的图片' : '还没有生成过图片'} action={!favoriteOnly && !modelFilter ? (
+          <Button size="sm" onClick={() => router.push('/studio')}>去生成</Button>
+        ) : undefined} />
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">
           {assets.map((asset) => (
             <div
               key={asset.id}
-              className="group relative aspect-square rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-subtle)] cursor-pointer"
-              onClick={() => router.push(`/gallery/${asset.id}`)}
+              className={`group relative aspect-square rounded-[var(--radius-md)] overflow-hidden border bg-[var(--color-surface-subtle)] ${selectionMode ? (selectedIds.includes(asset.id) ? 'border-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : 'border-[var(--color-border)]') : 'border-[var(--color-border)]'} cursor-pointer`}
+              onClick={() => (selectionMode ? toggleSelect(asset.id) : router.push(`/gallery/${asset.id}`))}
             >
               {asset.url || asset.thumbnail_url ? (
                 <img
@@ -168,11 +228,22 @@ export default function GalleryPage() {
                   <span className="text-xs">图片 {asset.id.slice(0, 6)}</span>
                 </div>
               )}
-              {/* Mobile: always visible actions, Desktop: hover */}
+              {selectionMode ? (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full border-2 border-white/90 flex items-center justify-center bg-black/30">
+                  {selectedIds.includes(asset.id) && <span className="text-white text-xs leading-none">✓</span>}
+                </div>
+              ) : (
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100">
                 <div className="absolute bottom-0 left-0 right-0 p-2 flex justify-between items-end">
                   <span className="text-[10px] text-white/70">AI 生成</span>
                   <div className="flex gap-1">
+                    <button
+                      title="复制 Prompt"
+                      onClick={(e) => { e.stopPropagation(); copyAssetPrompt(asset); }}
+                      className="text-xs text-white/80 hover:text-white tap-target p-1"
+                    >
+                      ⧉
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.id, asset.favorite); }}
                       className="text-xs text-white/80 hover:text-white tap-target p-1"
@@ -188,6 +259,7 @@ export default function GalleryPage() {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           ))}
         </div>

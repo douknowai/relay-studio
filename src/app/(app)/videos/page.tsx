@@ -1,10 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { GenerationAsset, ModelConfig } from '@/types';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
+import { copyToClipboard } from '@/lib/clipboard';
+import { downloadFile } from '@/lib/download';
 import { GridSkeleton, TableSkeleton, ErrorState, EmptyState } from '@/components/loading-states';
+import { toast } from 'sonner';
 
 export default function VideosPage() {
   const { session } = useAuth();
@@ -19,6 +23,10 @@ export default function VideosPage() {
   const [total, setTotal] = useState(0);
   const [playingAsset, setPlayingAsset] = useState<GenerationAsset | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [copyPromptFeedback, setCopyPromptFeedback] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
   const pageSize = 24;
 
   const fetchAssets = useCallback(async () => {
@@ -121,6 +129,62 @@ export default function VideosPage() {
     }
   };
 
+  const copyAssetPrompt = async (text: string) => {
+    if (!text) return;
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success('Prompt 已复制');
+  };
+
+  const copyPlayingPrompt = async (text: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopyPromptFeedback(true);
+      setTimeout(() => setCopyPromptFeedback(false), 1500);
+    }
+  };
+
+  const toggleSelect = (assetId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(assetId)) next.delete(assetId); else next.add(assetId);
+      return next;
+    });
+  };
+
+  const batchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定要删除选中的 ${selectedIds.size} 个视频吗？`)) return;
+    setBatchBusy(true);
+    let failed = 0;
+    for (const id of selectedIds) {
+      try {
+        const res = await fetchWithTimeout(`/api/v1/videos/${id}`, {
+          method: 'DELETE',
+          headers: { 'x-session': session?.access_token || '' },
+          timeout: 10_000,
+        });
+        if (!res.ok) failed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setBatchBusy(false);
+    setSelectedIds(new Set());
+    setBatchMode(false);
+    if (failed > 0) setError(`${failed} 个视频删除失败，请重试`);
+    fetchAssets();
+  };
+
+  const batchDownload = async () => {
+    if (selectedIds.size === 0) return;
+    setBatchBusy(true);
+    const targets = assets.filter(a => selectedIds.has(a.id) && a.url);
+    for (const asset of targets) {
+      await downloadAsset(asset);
+    }
+    setBatchBusy(false);
+  };
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
@@ -170,7 +234,17 @@ export default function VideosPage() {
       ) : error ? (
         <ErrorState message={error} onRetry={fetchAssets} />
       ) : assets.length === 0 ? (
-        <EmptyState message="暂无视频" />
+        <EmptyState
+          message="暂无视频"
+          action={
+            <Link
+              href="/studio?tab=video"
+              className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-[var(--radius-sm)] bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
+            >
+              去生成
+            </Link>
+          }
+        />
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">
           {assets.map((asset) => (
@@ -219,6 +293,26 @@ export default function VideosPage() {
                 <div className="absolute bottom-0 left-0 right-0 p-2 flex justify-between items-end">
                   <span className="text-[10px] text-white/70">AI 生成</span>
                   <div className="flex gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); copyAssetPrompt(asset.prompt || ''); }}
+                      title="复制 Prompt"
+                      className="text-xs text-white/80 hover:text-white tap-target p-1"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="5" y="5" width="8" height="8" rx="1.5" />
+                        <path d="M3.5 10.5h-1a1.5 1.5 0 0 1-1.5-1.5v-6A1.5 1.5 0 0 1 2.5 1.5h6A1.5 1.5 0 0 1 10 3v1" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (asset.url) downloadFile(asset.url, `video-${asset.id.slice(0, 8)}.mp4`); }}
+                      title="下载"
+                      className="text-xs text-white/80 hover:text-white tap-target p-1"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 2v8m0 0l-3-3m3 3l3-3" />
+                        <path d="M2.5 11.5v1a1.5 1.5 0 0 0 1.5 1.5h8a1.5 1.5 0 0 0 1.5-1.5v-1" />
+                      </svg>
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.id, asset.favorite); }}
                       className="text-xs text-white/80 hover:text-white tap-target p-1"
@@ -305,6 +399,18 @@ export default function VideosPage() {
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1.5">
                         <button
+                          onClick={() => asset.url && downloadFile(asset.url, `video-${asset.id.slice(0, 8)}.mp4`)}
+                          className="text-xs text-[var(--color-accent)] hover:underline"
+                        >
+                          下载
+                        </button>
+                        <button
+                          onClick={() => copyAssetPrompt(asset.prompt || '')}
+                          className="text-xs text-[var(--color-accent)] hover:underline"
+                        >
+                          复制Prompt
+                        </button>
+                        <button
                           onClick={() => toggleFavorite(asset.id, asset.favorite)}
                           className="text-xs text-[var(--color-accent)] hover:underline"
                         >
@@ -364,18 +470,28 @@ export default function VideosPage() {
                 视频地址不可用
               </div>
             )}
-            <div className="flex items-center justify-between mt-3 px-1">
-              <div className="text-xs text-white/60">
+            <div className="flex items-center justify-between gap-3 mt-3 px-1">
+              <div className="text-xs text-white/60 truncate">
                 {playingAsset.width && playingAsset.height && `${playingAsset.width}×${playingAsset.height}`}
                 {playingAsset.duration && ` · ${playingAsset.duration}s`}
               </div>
-              <button
-                onClick={() => downloadAsset(playingAsset)}
-                disabled={downloading}
-                className="text-xs text-white/80 hover:text-white border border-white/20 px-3 py-1.5 rounded-[var(--radius-sm)] disabled:opacity-50 tap-target"
-              >
-                {downloading ? '下载中...' : '下载'}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {playingAsset.prompt && (
+                  <button
+                    onClick={() => copyPlayingPrompt(playingAsset.prompt as string)}
+                    className="text-xs text-white/80 hover:text-white border border-white/20 px-3 py-1.5 rounded-[var(--radius-sm)] tap-target"
+                  >
+                    {copyPromptFeedback ? '已复制' : '复制 Prompt'}
+                  </button>
+                )}
+                <button
+                  onClick={() => downloadAsset(playingAsset)}
+                  disabled={downloading}
+                  className="text-xs text-white/80 hover:text-white border border-white/20 px-3 py-1.5 rounded-[var(--radius-sm)] disabled:opacity-50 tap-target"
+                >
+                  {downloading ? '下载中...' : '下载'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
