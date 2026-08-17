@@ -164,7 +164,7 @@ export function requireScope(auth: AuthResult, requiredScope: string): void {
   if (!Array.isArray(granted) || !granted.includes(requiredScope)) {
     throw new AppError(
       ErrorCodes.FORBIDDEN,
-      `Required scope: ${requiredScope}`,
+      `此 API Key 缺少权限 ${requiredScope}。请在「API Keys」页面删除后重新创建，并勾选所需权限范围（调用生成接口需对应媒体的 read/write 权限及 models:read）`,
       { required_scope: requiredScope, granted_scopes: granted ?? [] }
     );
   }

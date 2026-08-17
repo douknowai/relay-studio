@@ -10,9 +10,127 @@ interface ApiKey {
   id: string;
   name: string;
   prefix: string;
+  scopes: string[];
   created_at: string;
   last_used_at: string | null;
   is_active: boolean;
+}
+
+// Scope groups for the creation dialog. Must stay in sync with
+// API_KEY_SCOPES in src/server/validation/schemas.ts.
+const SCOPE_GROUPS: { label: string; scopes: { value: string; label: string }[] }[] = [
+  {
+    label: '图片',
+    scopes: [
+      { value: 'images:read', label: '查看图片' },
+      { value: 'images:write', label: '生成图片' },
+    ],
+  },
+  {
+    label: '视频',
+    scopes: [
+      { value: 'videos:read', label: '查看视频' },
+      { value: 'videos:write', label: '生成视频' },
+    ],
+  },
+  {
+    label: '任务',
+    scopes: [
+      { value: 'tasks:read', label: '查看任务' },
+      { value: 'tasks:write', label: '重试/取消任务' },
+    ],
+  },
+  {
+    label: '模型与用量',
+    scopes: [
+      { value: 'models:read', label: '查看模型列表' },
+      { value: 'usage:read', label: '查看用量' },
+    ],
+  },
+  {
+    label: '密钥与资料',
+    scopes: [
+      { value: 'api_keys:read', label: '查看密钥' },
+      { value: 'api_keys:write', label: '管理密钥' },
+      { value: 'profile:read', label: '查看资料' },
+      { value: 'profile:write', label: '修改资料' },
+    ],
+  },
+];
+
+// Default grants for a new key: full generation workflow for both media types.
+const DEFAULT_NEW_KEY_SCOPES = [
+  'images:read',
+  'images:write',
+  'videos:read',
+  'videos:write',
+  'models:read',
+];
+
+function ScopeEditor({
+  scopes,
+  onToggle,
+  onSave,
+  onCancel,
+  saving,
+  compact,
+}: {
+  scopes: string[];
+  onToggle: (scope: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)] ${compact ? 'p-3 mt-2' : 'p-4'}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-medium text-[var(--color-text)]">编辑权限范围</span>
+        <span className="text-[10px] text-[var(--color-text-subtle)]">已选 {scopes.length} 项</span>
+      </div>
+      <div className={compact ? 'space-y-2' : 'max-h-56 overflow-y-auto border border-[var(--color-border)] rounded-[var(--radius-md)] divide-y divide-[var(--color-border)]'}>
+        {SCOPE_GROUPS.map((group) => (
+          <div key={group.label} className={compact ? '' : 'px-3 py-2'}>
+            <p className="text-[10px] font-medium text-[var(--color-text-subtle)] uppercase tracking-wide mb-1.5">{group.label}</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {group.scopes.map((scope) => (
+                <label
+                  key={scope.value}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-[var(--radius-sm)] cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={scopes.includes(scope.value)}
+                    onChange={() => onToggle(scope.value)}
+                    className="w-3.5 h-3.5 accent-[var(--color-accent)]"
+                  />
+                  <span className="text-xs text-[var(--color-text)]">{scope.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className={`flex gap-2 ${compact ? 'mt-3' : 'mt-4'}`}>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving || scopes.length === 0}
+          className="text-xs font-medium px-3 py-1.5 rounded bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? '保存中…' : '保存'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-xs font-medium px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] disabled:opacity-50"
+        >
+          取消
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function ApiKeysPage() {
@@ -23,9 +141,13 @@ export default function ApiKeysPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(DEFAULT_NEW_KEY_SCOPES);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
+  const [editingScopes, setEditingScopes] = useState<string[]>([]);
+  const [isSavingScopes, setIsSavingScopes] = useState(false);
 
   const fetchKeys = useCallback(async () => {
     setIsLoading(true);
@@ -53,8 +175,18 @@ export default function ApiKeysPage() {
     if (session) fetchKeys();
   }, [session, fetchKeys]);
 
+  const toggleScope = (scope: string) => {
+    setNewKeyScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]
+    );
+  };
+
   const createKey = async () => {
     if (!newKeyName.trim()) return;
+    if (newKeyScopes.length === 0) {
+      setError('请至少选择一个权限范围');
+      return;
+    }
     setError(null);
     try {
       const res = await fetchWithTimeout('/api/v1/api-keys', {
@@ -63,7 +195,7 @@ export default function ApiKeysPage() {
           'Content-Type': 'application/json',
           'x-session': session?.access_token || '',
         },
-        body: JSON.stringify({ name: newKeyName.trim() }),
+        body: JSON.stringify({ name: newKeyName.trim(), scopes: newKeyScopes }),
         timeout: 8_000,
       });
       if (res.ok) {
@@ -126,6 +258,42 @@ export default function ApiKeysPage() {
     }
   };
 
+  const toggleEditingScope = (scope: string) => {
+    setEditingScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]
+    );
+  };
+
+  const saveKeyScopes = async (keyId: string) => {
+    if (editingScopes.length === 0) {
+      toast.error('请至少选择一个权限');
+      return;
+    }
+    setIsSavingScopes(true);
+    try {
+      const res = await fetchWithTimeout(`/api/v1/api-keys/${keyId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': session?.access_token || '',
+        },
+        body: JSON.stringify({ scopes: editingScopes }),
+        timeout: 8_000,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error?.message || '保存失败');
+      }
+      toast.success('权限已更新');
+      setEditingKeyId(null);
+      fetchKeys();
+    } catch (err) {
+      toast.error('保存失败：' + (err instanceof Error ? err.message : '未知错误'));
+    } finally {
+      setIsSavingScopes(false);
+    }
+  };
+
   const handleCopyKey = async () => {
     if (!createdKey) return;
     try {
@@ -159,6 +327,8 @@ export default function ApiKeysPage() {
         <button
           onClick={() => {
             if (!apiAccessEnabled) return;
+            setNewKeyScopes(DEFAULT_NEW_KEY_SCOPES);
+            setError(null);
             setShowCreateDialog(true);
           }}
           disabled={!apiAccessEnabled}
@@ -223,6 +393,42 @@ export default function ApiKeysPage() {
                   placeholder="例如: 生产环境"
                   className="w-full px-3 py-2 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                 />
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-[var(--color-text-muted)]">权限范围</label>
+                    <span className="text-[10px] text-[var(--color-text-subtle)]">
+                      已选 {newKeyScopes.length} 项
+                    </span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto border border-[var(--color-border)] rounded-[var(--radius-md)] divide-y divide-[var(--color-border)]">
+                    {SCOPE_GROUPS.map((group) => (
+                      <div key={group.label} className="px-3 py-2">
+                        <p className="text-[10px] font-medium text-[var(--color-text-subtle)] uppercase tracking-wide mb-1.5">{group.label}</p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {group.scopes.map((scope) => (
+                            <label
+                              key={scope.value}
+                              className="flex items-center gap-1.5 px-2 py-1.5 rounded-[var(--radius-sm)] cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={newKeyScopes.includes(scope.value)}
+                                onChange={() => toggleScope(scope.value)}
+                                className="w-3.5 h-3.5 accent-[var(--color-accent)]"
+                              />
+                              <span className="text-xs text-[var(--color-text)]">{scope.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-[var(--color-text-subtle)]">
+                    调用生成接口需要对应媒体类型权限与 models:read；范围过大有泄露风险，请按需勾选。
+                  </p>
+                </div>
+
                 {error && <p className="mt-1.5 text-xs text-[var(--color-destructive)]">{error}</p>}
                 <div className="flex gap-2 mt-4">
                   <button
@@ -233,7 +439,7 @@ export default function ApiKeysPage() {
                   </button>
                   <button
                     onClick={createKey}
-                    disabled={!newKeyName.trim()}
+                    disabled={!newKeyName.trim() || newKeyScopes.length === 0}
                     className="flex-1 py-2 text-xs font-medium text-white bg-[var(--color-accent)] rounded-[var(--radius-sm)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 tap-target"
                   >
                     创建
@@ -268,11 +474,27 @@ export default function ApiKeysPage() {
                   </span>
                 </div>
                 <p className="text-xs font-mono text-[var(--color-text-muted)] mb-2 mobile-break-all">{key.prefix}••••••••</p>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {(key.scopes || []).slice(0, 4).map((scope) => (
+                    <span key={scope} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-surface-subtle)] text-[var(--color-text-muted)] border border-[var(--color-border)]">
+                      {scope}
+                    </span>
+                  ))}
+                  {(key.scopes || []).length > 4 && (
+                    <span className="text-[10px] text-[var(--color-text-subtle)]">+{key.scopes.length - 4}</span>
+                  )}
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-[var(--color-text-subtle)]">
                     创建于 {new Date(key.created_at).toLocaleDateString('zh-CN')}
                   </span>
                   <div className="flex gap-2">
+                    <button
+                      onClick={() => { setEditingKeyId(editingKeyId === key.id ? null : key.id); setEditingScopes(key.scopes || []); }}
+                      className="text-xs text-[var(--color-accent)] hover:underline tap-target"
+                    >
+                      {editingKeyId === key.id ? '收起' : '权限'}
+                    </button>
                     <button
                       onClick={() => toggleKey(key.id, key.is_active)}
                       className="text-xs text-[var(--color-accent)] hover:underline tap-target"
@@ -287,6 +509,16 @@ export default function ApiKeysPage() {
                     </button>
                   </div>
                 </div>
+                {editingKeyId === key.id && (
+                  <ScopeEditor
+                    compact
+                    scopes={editingScopes}
+                    onToggle={toggleEditingScope}
+                    onSave={() => saveKeyScopes(key.id)}
+                    onCancel={() => setEditingKeyId(null)}
+                    saving={isSavingScopes}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -298,6 +530,7 @@ export default function ApiKeysPage() {
                 <tr className="bg-[var(--color-surface-subtle)] border-b border-[var(--color-border)]">
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-muted)]">名称</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-muted)]">前缀</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-muted)]">权限</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-muted)]">状态</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-muted)]">创建时间</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-[var(--color-text-muted)]">最后使用</th>
@@ -306,9 +539,24 @@ export default function ApiKeysPage() {
               </thead>
               <tbody>
                 {keys.map((key) => (
-                  <tr key={key.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-hover)]">
+                  <React.Fragment key={key.id}>
+                  <tr className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-hover)]">
                     <td className="px-4 py-2.5 text-[var(--color-text)]">{key.name}</td>
                     <td className="px-4 py-2.5 text-xs font-mono text-[var(--color-text-muted)]">{key.prefix}••••••••</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1 max-w-48">
+                        {(key.scopes || []).slice(0, 3).map((scope) => (
+                          <span key={scope} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-surface-subtle)] text-[var(--color-text-muted)] border border-[var(--color-border)]">
+                            {scope}
+                          </span>
+                        ))}
+                        {(key.scopes || []).length > 3 && (
+                          <span className="text-[10px] text-[var(--color-text-subtle)] self-center" title={(key.scopes || []).join(', ')}>
+                            +{key.scopes.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-2.5">
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                         key.is_active
@@ -326,6 +574,12 @@ export default function ApiKeysPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1.5">
+                        <button
+                          onClick={() => { setEditingKeyId(editingKeyId === key.id ? null : key.id); setEditingScopes(key.scopes || []); }}
+                          className="text-xs text-[var(--color-accent)] hover:underline"
+                        >
+                          {editingKeyId === key.id ? '收起' : '权限'}
+                        </button>
                         <button onClick={() => toggleKey(key.id, key.is_active)} className="text-xs text-[var(--color-accent)] hover:underline">
                           {key.is_active ? '禁用' : '启用'}
                         </button>
@@ -335,6 +589,22 @@ export default function ApiKeysPage() {
                       </div>
                     </td>
                   </tr>
+                  {editingKeyId === key.id && (
+                    <tr className="border-b border-[var(--color-border)] last:border-0">
+                      <td colSpan={7} className="px-4 py-3 bg-[var(--color-surface-subtle)]">
+                        <div className="max-w-md">
+                          <ScopeEditor
+                            scopes={editingScopes}
+                            onToggle={toggleEditingScope}
+                            onSave={() => saveKeyScopes(key.id)}
+                            onCancel={() => setEditingKeyId(null)}
+                            saving={isSavingScopes}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

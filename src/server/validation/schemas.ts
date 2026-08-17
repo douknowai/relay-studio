@@ -128,6 +128,13 @@ export const revokeApiKeySchema = z.object({
   key_id: z.string().uuid('Invalid key ID'),
 });
 
+export const updateApiKeySchema = z.object({
+  is_active: z.boolean().optional(),
+  // Allow granting additional scopes to an existing key without rotating it
+  // (the plaintext secret is shown only once at creation time).
+  scopes: z.array(z.enum(API_KEY_SCOPES)).max(API_KEY_SCOPES.length).optional(),
+}).strict();
+
 export const updateProfileSchema = z.object({
   // null clears the display name back to the email-derived default
   display_name: z.string().min(1).max(128).nullable().optional(),

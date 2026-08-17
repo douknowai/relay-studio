@@ -85,6 +85,9 @@ export interface VideoCapabilityMetadata {
   supported_resolutions?: string[];
   supported_ratios?: string[];
   supported_durations?: number[];
+  min_duration?: number;
+  max_duration?: number;
+  generate_audio_default?: boolean;
   max_videos_per_request?: number;
   default_resolution?: string;
   default_ratio?: string;

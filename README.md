@@ -248,7 +248,7 @@ pnpm build
 - API Key：`Authorization: Bearer <your-internal-api-key>`
 - Web Session：`x-session: <supabase-access-token>`
 
-API Key 可按资源授予 `images:*`、`videos:*`、`tasks:*`、`models:read`、`usage:read`、`api_keys:*` 和 `profile:*` Scope。明文 Key 仅在创建时返回一次。
+API Key 可按资源授予 `images:*`、`videos:*`、`tasks:*`、`models:read`、`usage:read`、`api_keys:*` 和 `profile:*` Scope。明文 Key 仅在创建时返回一次；创建后可在「API Keys」页面随时编辑权限范围（调用生成接口需对应媒体的 read/write 与 `models:read`），无需删除重建。
 
 ### 接口列表
 

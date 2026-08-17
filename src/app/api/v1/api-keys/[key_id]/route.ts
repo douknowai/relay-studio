@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { authenticateRequest, successResponse, errorResponse, requireScope } from '@/server/api-helpers';
 import { AppError, ErrorCodes } from '@/server/errors';
+import { updateApiKeySchema } from '@/server/validation/schemas';
 
 export async function PATCH(
   request: NextRequest,
@@ -10,12 +11,11 @@ export async function PATCH(
     const { key_id } = await params;
     const auth = await authenticateRequest(request);
     requireScope(auth, 'api_keys:write');
-    const body = await request.json();
-    const { is_active } = body as { is_active?: boolean };
-
-    if (typeof is_active !== 'boolean') {
-      throw new AppError(ErrorCodes.INVALID_REQUEST, 'is_active 必须为布尔值');
+    const parsed = updateApiKeySchema.safeParse(await request.json());
+    if (!parsed.success) {
+      throw new AppError(ErrorCodes.INVALID_REQUEST, parsed.error.issues[0]?.message ?? '请求参数无效');
     }
+    const { is_active, scopes } = parsed.data;
 
     const { getSupabaseServerClient } = await import('@/storage/database/supabase-client');
     const supabase = getSupabaseServerClient();
@@ -32,9 +32,15 @@ export async function PATCH(
       throw new AppError(ErrorCodes.FORBIDDEN, '无权操作此密钥');
     }
 
-    const updateData = is_active
-      ? { revoked_at: null }
-      : { revoked_at: new Date().toISOString() };
+    // Build the patch: is_active toggles revoked_at, scopes replaces the grant list.
+    // When only scopes is provided, the revocation state must be left untouched.
+    const updateData: { revoked_at?: string | null; scopes?: string[] } = {};
+    if (is_active !== undefined) {
+      updateData.revoked_at = is_active ? null : new Date().toISOString();
+    }
+    if (scopes) {
+      updateData.scopes = Array.from(new Set(scopes));
+    }
 
     const { error } = await supabase
       .from('api_keys')
@@ -43,7 +49,10 @@ export async function PATCH(
 
     if (error) throw new AppError(ErrorCodes.INTERNAL_ERROR, '更新失败');
 
-    return successResponse({ updated: true, is_active }, auth.requestId);
+    return successResponse(
+      { updated: true, ...(is_active !== undefined ? { is_active } : {}), ...(scopes ? { scopes: updateData.scopes } : {}) },
+      auth.requestId
+    );
   } catch (err) {
     return errorResponse(err, '');
   }

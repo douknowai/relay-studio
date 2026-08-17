@@ -94,17 +94,55 @@ export default function StudioPage() {
 
   const selectedModel = models.find(m => m.code === selectedModelCode);
 
-  // Video capabilities derived from selected model
+  // Video capabilities derived from selected model.
   const videoMeta = selectedModel?.capability_metadata as VideoCapabilityMetadata | undefined;
-  const videoCapResolutions: string[] = videoMeta?.supported_resolutions ?? ['480p', '720p', '1080p'];
+  // Resolution options MUST read the `supported_sizes` DB column first — the
+  // backend videos route validates against exactly this source (with
+  // capability_metadata.supported_resolutions as fallback). Keeping the same
+  // precedence here prevents offering options the backend will reject.
+  const videoCapResolutions: string[] =
+    (selectedModel?.supported_sizes?.length ? selectedModel.supported_sizes : undefined) ??
+    videoMeta?.supported_resolutions ??
+    ['480p', '720p', '1080p'];
   const videoCapRatios: string[] = videoMeta?.supported_ratios ?? ['16:9', '9:16', '1:1'];
-  const videoCapDurations: number[] = videoMeta?.supported_durations ?? [5, 10];
+  const videoCapDurations: number[] = (() => {
+    if (videoMeta?.supported_durations?.length) return videoMeta.supported_durations;
+    const min = videoMeta?.min_duration;
+    const max = videoMeta?.max_duration;
+    if (typeof min === 'number' && typeof max === 'number' && max >= min) {
+      return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+    }
+    return [5, 10];
+  })();
 
   // Models filtered by current media mode
   const filteredModels = models.filter(m => {
     const mt = m.capability_metadata?.media_type ?? (m.provider_type?.includes('video') ? 'video' : 'image');
     return mt === mediaMode;
   });
+
+  // Apply a model's default generation parameters. Resolution options follow
+  // the same precedence as the backend validation: `supported_sizes` column
+  // first, capability_metadata.supported_resolutions as fallback.
+  const applyModelDefaults = useCallback((model: ModelConfig | undefined) => {
+    if (!model) return;
+    if (model.supported_sizes?.[0]) {
+      setSize(model.supported_sizes[0]);
+    }
+    const cap = model.capability_metadata as Record<string, unknown> | undefined;
+    const modelResolutions = model.supported_sizes?.length
+      ? model.supported_sizes
+      : (cap?.supported_resolutions as string[] | undefined);
+    if (modelResolutions?.length) {
+      setVideoResolution((cap?.default_resolution as string) || modelResolutions[modelResolutions.length - 1]);
+    }
+    if (Array.isArray(cap?.supported_ratios) && cap.supported_ratios.length > 0) {
+      setVideoRatio((cap.default_ratio as string) || (cap.supported_ratios[0] as string));
+    }
+    if (Array.isArray(cap?.supported_durations) && cap.supported_durations.length > 0) {
+      setVideoDuration((cap.default_duration as number) || (cap.supported_durations[0] as number));
+    }
+  }, []);
 
   // Fetch models
   useEffect(() => {
@@ -128,8 +166,7 @@ export default function StudioPage() {
             setSelectedModelCode((prev) => {
               // Only auto-select if no model is currently selected or the selected one is gone
               if (!prev || !enabledModels.find((m: ModelConfig) => m.code === prev)) {
-                const defaultSize = enabledModels[0].supported_sizes?.[0] || '2K';
-                setSize(defaultSize);
+                applyModelDefaults(enabledModels[0]);
                 return enabledModels[0].code;
               }
               return prev;
@@ -144,7 +181,7 @@ export default function StudioPage() {
     }
     fetchModels();
     return () => { cancelled = true; };
-  }, [session, mediaMode]);
+  }, [session, mediaMode, applyModelDefaults]);
 
   // Fetch quota
   useEffect(() => {
@@ -699,34 +736,34 @@ export default function StudioPage() {
             {modelsLoading ? (
               <div className="h-9 w-full rounded-md bg-[var(--color-bg-subtle)] animate-pulse" />
             ) : (
+              <>
               <select
                 value={selectedModelCode}
                 onChange={(e) => {
                   setSelectedModelCode(e.target.value);
                   const model = filteredModels.find(m => m.code === e.target.value);
-                  if (model?.supported_sizes?.[0]) {
-                    setSize(model.supported_sizes[0]);
-                  }
-                  // Set video defaults from model capabilities
-                  const cap = model?.capability_metadata as Record<string, unknown> | undefined;
-                  if (cap) {
-                    if (Array.isArray(cap.supported_resolutions) && cap.supported_resolutions.length > 0) {
-                      setVideoResolution(cap.default_resolution as string || cap.supported_resolutions[0] as string);
-                    }
-                    if (Array.isArray(cap.supported_ratios) && cap.supported_ratios.length > 0) {
-                      setVideoRatio(cap.default_ratio as string || cap.supported_ratios[0] as string);
-                    }
-                    if (Array.isArray(cap.supported_durations) && cap.supported_durations.length > 0) {
-                      setVideoDuration(cap.default_duration as number || cap.supported_durations[0] as number);
-                    }
-                  }
+                  applyModelDefaults(model);
                 }}
                 className="w-full px-3 py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
               >
-                {filteredModels.map((model) => (
-                  <option key={model.code} value={model.code}>{model.display_name}</option>
-                ))}
+                {filteredModels.length === 0 && (
+                  <option value="" disabled>暂无可用模型</option>
+                )}
+                {filteredModels.map((model) => {
+                  const desc = (model.capability_metadata as Record<string, unknown> | null | undefined)?.description as string | undefined;
+                  return (
+                    <option key={model.code} value={model.code}>
+                      {desc ? `${model.display_name} — ${desc}` : model.display_name}
+                    </option>
+                  );
+                })}
               </select>
+              {filteredModels.length === 0 && (
+                <p className="mt-1.5 text-xs text-[var(--color-text-subtle)]">
+                  {mediaMode === 'video' ? '暂无可用的视频模型，请联系管理员在后台启用' : '暂无可用的图片模型，请联系管理员在后台启用'}
+                </p>
+              )}
+              </>
             )}
           </div>
 
