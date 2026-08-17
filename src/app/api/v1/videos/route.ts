@@ -212,6 +212,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 6.5 Validate duration against capability_metadata.min_duration/max_duration
+    const capabilityMeta = modelConfig.capability_metadata as Record<string, unknown> | null;
+    const minDuration = typeof capabilityMeta?.min_duration === 'number' ? capabilityMeta.min_duration : null;
+    const maxDuration = typeof capabilityMeta?.max_duration === 'number' ? capabilityMeta.max_duration : null;
+    if (duration >= 0) {
+      if (minDuration !== null && duration < minDuration) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, `时长不能小于 ${minDuration} 秒`);
+      }
+      if (maxDuration !== null && duration > maxDuration) {
+        throw new AppError(ErrorCodes.INVALID_REQUEST, `时长不能超过 ${maxDuration} 秒`);
+      }
+    }
+
     // 7. Determine task type
     let taskType: TaskType;
     if (reference_asset_ids && reference_asset_ids.length >= 2) {

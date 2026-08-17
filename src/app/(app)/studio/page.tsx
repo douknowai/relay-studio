@@ -56,6 +56,7 @@ export default function StudioPage() {
   const { profile, session } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [models, setModels] = useState<ModelConfig[]>([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [selectedModelCode, setSelectedModelCode] = useState<string>('');
   const [taskType, setTaskType] = useState<'text_to_image' | 'image_to_image' | 'text_to_video' | 'image_to_video' | 'first_last_frame'>('text_to_image');
   const [size, setSize] = useState('2K');
@@ -192,35 +193,45 @@ export default function StudioPage() {
           headers: { 'x-session': session?.access_token || '' },
           timeout: 10_000,
         });
+        if (res.status === 401) {
+          // Session expired: redirect instead of silently keeping stale models,
+          // otherwise switching modes filters the stale list into "no models".
+          if (!cancelled) window.location.href = '/login';
+          return;
+        }
         if (res.ok && !cancelled) {
           const data = await res.json();
-          const enabledModels = (data.data || []).filter((m: ModelConfig) => {
-            if (!m.enabled) return false;
-            const meta = m.capability_metadata as Record<string, unknown> | null;
-            const modelMediaType = meta?.media_type as string | undefined;
-            return modelMediaType === mediaMode || (mediaMode === 'image' && !modelMediaType);
-          });
+          // Store ALL enabled models; mode filtering happens at render time.
+          // Fetching per-mode + silently keeping stale data on failure caused
+          // the "video mode shows no models" bug.
+          const enabledModels = (data.data || []).filter((m: ModelConfig) => m.enabled);
           setModels(enabledModels);
-          if (enabledModels.length > 0) {
-            setSelectedModelCode((prev) => {
-              // Only auto-select if no model is currently selected or the selected one is gone
-              if (!prev || !enabledModels.find((m: ModelConfig) => m.code === prev)) {
-                applyModelDefaults(enabledModels[0]);
-                return enabledModels[0].code;
-              }
-              return prev;
-            });
-          }
+          setModelsError(null);
+        } else if (!cancelled) {
+          setModelsError('模型列表加载失败，请刷新重试');
         }
       } catch {
-        // Ignore
+        if (!cancelled) setModelsError('模型列表加载失败，请刷新重试');
       } finally {
         if (!cancelled) setModelsLoading(false);
       }
     }
     fetchModels();
     return () => { cancelled = true; };
-  }, [session, mediaMode, applyModelDefaults]);
+  }, [session, applyModelDefaults]);
+
+  // Auto-select: re-run when the filtered list changes (mode switch / models load)
+  useEffect(() => {
+    if (filteredModels.length === 0) return;
+    setSelectedModelCode((prev) => {
+      if (!prev || !filteredModels.find((m: ModelConfig) => m.code === prev)) {
+        applyModelDefaults(filteredModels[0]);
+        return filteredModels[0].code;
+      }
+      return prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredModels, applyModelDefaults]);
 
   // Fetch quota
   useEffect(() => {
@@ -924,7 +935,9 @@ export default function StudioPage() {
                 }}
                 className="w-full px-3 py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
               >
-                {filteredModels.length === 0 && (
+                {modelsError ? (
+                  <option value="" disabled>模型加载失败：{modelsError}</option>
+                ) : filteredModels.length === 0 && (
                   <option value="" disabled>暂无可用模型</option>
                 )}
                 {filteredModels.map((model) => {
