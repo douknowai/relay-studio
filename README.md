@@ -248,7 +248,7 @@ pnpm build
 - API Key：`Authorization: Bearer <your-internal-api-key>`
 - Web Session：`x-session: <supabase-access-token>`
 
-API Key 可按资源授予 `images:*`、`videos:*`、`tasks:*`、`models:read`、`usage:read`、`api_keys:*` 和 `profile:*` Scope。明文 Key 仅在创建时返回一次；创建后可在「API Keys」页面随时编辑权限范围（调用生成接口需对应媒体的 read/write 与 `models:read`），无需删除重建。
+API Key 可按资源授予 `images:*`、`videos:*`、`tasks:*`、`models:read`、`usage:read`、`api_keys:*` 和 `profile:*` Scope。明文 Key 仅在创建时返回一次；创建后可在「API Keys」页面随时编辑权限范围（调用生成接口需对应媒体的 read/write 与 `models:read`），无需删除重建。创建时可选有效期（30/90/180/365 天或永久，`expires_in_days`），过期后 Key 自动失效。
 
 ### 接口列表
 
@@ -261,7 +261,7 @@ API Key 可按资源授予 `images:*`、`videos:*`、`tasks:*`、`models:read`�
 | `/api/v1/videos/[video_id]` | GET | 获取视频详情（含签名 URL） |
 | `/api/v1/tasks` | GET | 列出任务 |
 | `/api/v1/tasks/[task_id]` | GET | 获取任务详情 |
-| `/api/v1/usage` | GET | 查询使用量 |
+| `/api/v1/usage` | GET | 查询使用量（`?days=7|30` 指定趋势范围，默认 7 天） |
 
 ### Python 示例
 
