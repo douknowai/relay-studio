@@ -149,8 +149,6 @@ Desktop.ini
 /bin/
 /.optional-files
 
-
-# Preview files
-.preview
-.cozeproj/reduction
-.codegraph
+# Next.js 自动生成的类型声明
+# 每次 next dev / next build 都会在 dev 与 prod 路径间重写，禁止入库避免噪音提交
+next-env.d.ts
