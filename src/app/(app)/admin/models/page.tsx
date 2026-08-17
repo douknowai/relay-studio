@@ -5,7 +5,18 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { ModelConfig, ProviderType } from '@/types';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
-import { TableSkeleton, ErrorState, EmptyState } from '@/components/loading-states';
+import { TableSkeleton, ErrorState } from '@/components/loading-states';
+import {
+  ConsolePage,
+  ConsoleSection,
+  ConsoleRow,
+  CONSOLE_TOKENS,
+  consoleInputStyle,
+  consoleSelectStyle,
+  consolePrimaryButton,
+  consoleSecondaryButton,
+  consoleTextActionButton,
+} from '@/components/console';
 
 type ModelForm = {
   code: string;
@@ -78,6 +89,27 @@ function getVideoCapabilities(meta: Record<string, unknown> | null): {
   };
 }
 
+/* ── Inline form field wrapper ──────────────────────────────── */
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 12,
+  fontWeight: 500,
+  color: CONSOLE_TOKENS.textSecondary,
+  marginBottom: 4,
+};
+
+const inputStyle: React.CSSProperties = {
+  ...consoleInputStyle,
+  width: '100%',
+  padding: '0 10px',
+};
+
+const selectStyle: React.CSSProperties = {
+  ...consoleSelectStyle,
+  width: '100%',
+};
+
+/* ── Page ───────────────────────────────────────────────────── */
 export default function AdminModelsPage() {
   const { isAdmin, session } = useAuth();
   const [models, setModels] = useState<ModelConfig[]>([]);
@@ -269,199 +301,371 @@ export default function AdminModelsPage() {
   const isVideo = isVideoProvider(form.provider_type);
 
   return (
-    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-3">
-        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">模型配置</h1>
+    <ConsolePage
+      title="模型配置"
+      actions={
         <button
+          type="button"
           onClick={() => {
             setEditingModel(null);
             setForm(defaultImageForm);
             setShowCreate(true);
           }}
-          className="px-3 py-2 md:py-1.5 text-xs font-medium text-white bg-[#1A1A1A] hover:bg-[#333333] rounded-[var(--radius-md)] tap-target self-start"
+          style={consolePrimaryButton}
         >
           添加模型
         </button>
-      </div>
-
+      }
+    >
       {/* Create/Edit Form */}
       {(showCreate || editingModel) && (
-        <div className="mb-4 md:mb-6 p-4 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)]">
-          <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2
+            style={{
+              fontSize: 16,
+              lineHeight: '24px',
+              fontWeight: 600,
+              color: CONSOLE_TOKENS.textPrimary,
+              margin: 0,
+            }}
+          >
             {editingModel ? '编辑模型' : '添加模型'}
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">内部代码</label>
-              <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })}
-                disabled={!!editingModel}
-                className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)] disabled:opacity-50" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">显示名称</label>
-              <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-                className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Provider 类型</label>
-              <select value={form.provider_type} onChange={(e) => handleProviderTypeChange(e.target.value as ProviderType)}
-                className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]">
-                <option value="mock">Mock</option>
-                <option value="coze_coding">Coze Coding SDK (图像)</option>
-                <option value="coze_coding_video">Coze Coding SDK (视频)</option>
-                <option value="coze_workflow">Coze Workflow</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">外部模型 ID</label>
-              <input value={form.external_model_id} onChange={(e) => setForm({ ...form, external_model_id: e.target.value })}
-                placeholder={isVideo ? '如: doubao-seedance-1-5-pro-251215' : '如: image-pro'}
-                className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Workflow ID</label>
-              <input value={form.workflow_id} onChange={(e) => setForm({ ...form, workflow_id: e.target.value })}
-                className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
-            </div>
-
-            {/* Image-specific fields */}
-            {!isVideo && (
+          </h2>
+          <div
+            style={{
+              background: CONSOLE_TOKENS.containerBg,
+              border: `1px solid ${CONSOLE_TOKENS.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+          >
+            {/* Fields grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: 12,
+              }}
+            >
               <div>
-                <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">支持尺寸（逗号分隔）</label>
-                <input value={form.supported_sizes} onChange={(e) => setForm({ ...form, supported_sizes: e.target.value })}
-                  placeholder="1024x1024,2048x2048,2K,4K"
-                  className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
+                <label style={labelStyle}>内部代码</label>
+                <input
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  disabled={!!editingModel}
+                  style={{ ...inputStyle, opacity: editingModel ? 0.5 : 1 }}
+                />
               </div>
-            )}
+              <div>
+                <label style={labelStyle}>显示名称</label>
+                <input
+                  value={form.display_name}
+                  onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Provider 类型</label>
+                <select
+                  value={form.provider_type}
+                  onChange={(e) => handleProviderTypeChange(e.target.value as ProviderType)}
+                  style={selectStyle}
+                >
+                  <option value="mock">Mock</option>
+                  <option value="coze_coding">Coze Coding SDK (图像)</option>
+                  <option value="coze_coding_video">Coze Coding SDK (视频)</option>
+                  <option value="coze_workflow">Coze Workflow</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>外部模型 ID</label>
+                <input
+                  value={form.external_model_id}
+                  onChange={(e) => setForm({ ...form, external_model_id: e.target.value })}
+                  placeholder={isVideo ? '如: doubao-seedance-1-5-pro-251215' : '如: image-pro'}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Workflow ID</label>
+                <input
+                  value={form.workflow_id}
+                  onChange={(e) => setForm({ ...form, workflow_id: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
 
-            {/* Video-specific fields */}
-            {isVideo && (
-              <>
+              {/* Image-specific */}
+              {!isVideo && (
                 <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">支持分辨率（逗号分隔）</label>
-                  <input value={form.supported_resolutions} onChange={(e) => setForm({ ...form, supported_resolutions: e.target.value })}
-                    placeholder="480p,720p,1080p"
-                    className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
+                  <label style={labelStyle}>支持尺寸（逗号分隔）</label>
+                  <input
+                    value={form.supported_sizes}
+                    onChange={(e) => setForm({ ...form, supported_sizes: e.target.value })}
+                    placeholder="1024x1024,2048x2048,2K,4K"
+                    style={inputStyle}
+                  />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">支持比例（逗号分隔）</label>
-                  <input value={form.supported_ratios} onChange={(e) => setForm({ ...form, supported_ratios: e.target.value })}
-                    placeholder="16:9,9:16,1:1"
-                    className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">支持时长（秒，逗号分隔）</label>
-                  <input value={form.supported_durations} onChange={(e) => setForm({ ...form, supported_durations: e.target.value })}
-                    placeholder="5,10"
-                    className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
-                </div>
-              </>
-            )}
+              )}
 
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">
-                {isVideo ? '最大视频数/请求' : '最大生成数/请求'}
-              </label>
-              <input type="number" value={isVideo ? form.max_videos_per_request : form.max_images_per_request}
-                onChange={(e) => isVideo
-                  ? setForm({ ...form, max_videos_per_request: Number(e.target.value) })
-                  : setForm({ ...form, max_images_per_request: Number(e.target.value) })}
-                className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
+              {/* Video-specific */}
+              {isVideo && (
+                <>
+                  <div>
+                    <label style={labelStyle}>支持分辨率（逗号分隔）</label>
+                    <input
+                      value={form.supported_resolutions}
+                      onChange={(e) => setForm({ ...form, supported_resolutions: e.target.value })}
+                      placeholder="480p,720p,1080p"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>支持比例（逗号分隔）</label>
+                    <input
+                      value={form.supported_ratios}
+                      onChange={(e) => setForm({ ...form, supported_ratios: e.target.value })}
+                      placeholder="16:9,9:16,1:1"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>支持时长（秒，逗号分隔）</label>
+                    <input
+                      value={form.supported_durations}
+                      onChange={(e) => setForm({ ...form, supported_durations: e.target.value })}
+                      placeholder="5,10"
+                      style={inputStyle}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label style={labelStyle}>
+                  {isVideo ? '最大视频数/请求' : '最大生成数/请求'}
+                </label>
+                <input
+                  type="number"
+                  value={isVideo ? form.max_videos_per_request : form.max_images_per_request}
+                  onChange={(e) =>
+                    isVideo
+                      ? setForm({ ...form, max_videos_per_request: Number(e.target.value) })
+                      : setForm({ ...form, max_images_per_request: Number(e.target.value) })
+                  }
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>超时（秒）</label>
+                <input
+                  type="number"
+                  value={form.timeout_seconds}
+                  onChange={(e) => setForm({ ...form, timeout_seconds: Number(e.target.value) })}
+                  style={inputStyle}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">超时(秒)</label>
-              <input type="number" value={form.timeout_seconds} onChange={(e) => setForm({ ...form, timeout_seconds: Number(e.target.value) })}
-                className="w-full px-3 py-2 md:py-1.5 text-sm bg-[var(--color-surface-subtle)] border border-[var(--color-border)] rounded-[var(--radius-md)]" />
-            </div>
-          </div>
 
-          {/* Capability toggles */}
-          <div className="flex flex-wrap gap-3 mt-3">
-            {!isVideo ? (
-              [
-                { key: 'enabled' as const, label: '启用' },
-                { key: 'supports_text_to_image' as const, label: '文生图' },
-                { key: 'supports_image_to_image' as const, label: '图生图' },
-                { key: 'supports_multiple_references' as const, label: '多参考图' },
-                { key: 'supports_visible_watermark_control' as const, label: '水印控制' },
-              ].map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] tap-target py-1">
-                  <input type="checkbox" checked={form[key] as boolean}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
+            {/* Capability toggles */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
+              {(isVideo
+                ? [
+                    { key: 'enabled' as const, label: '启用' },
+                    { key: 'supports_text_to_video' as const, label: '文生视频' },
+                    { key: 'supports_image_to_video' as const, label: '图生视频' },
+                    { key: 'supports_multiple_references' as const, label: '多参考图' },
+                    { key: 'supports_reference_video' as const, label: '参考视频' },
+                    { key: 'supports_reference_audio' as const, label: '参考音频' },
+                  ]
+                : [
+                    { key: 'enabled' as const, label: '启用' },
+                    { key: 'supports_text_to_image' as const, label: '文生图' },
+                    { key: 'supports_image_to_image' as const, label: '图生图' },
+                    { key: 'supports_multiple_references' as const, label: '多参考图' },
+                    { key: 'supports_visible_watermark_control' as const, label: '水印控制' },
+                  ]
+              ).map(({ key, label }) => (
+                <label
+                  key={key}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 13,
+                    color: CONSOLE_TOKENS.textSecondary,
+                    cursor: 'pointer',
+                    padding: '4px 0',
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form[key] as boolean}
+                    onChange={(e) => setForm({ ...form, [key]: e.target.checked })}
+                    style={{ accentColor: CONSOLE_TOKENS.accent }}
+                  />
                   {label}
                 </label>
-              ))
-            ) : (
-              [
-                { key: 'enabled' as const, label: '启用' },
-                { key: 'supports_text_to_video' as const, label: '文生视频' },
-                { key: 'supports_image_to_video' as const, label: '图生视频' },
-                { key: 'supports_multiple_references' as const, label: '多参考图' },
-                { key: 'supports_reference_video' as const, label: '参考视频' },
-                { key: 'supports_reference_audio' as const, label: '参考音频' },
-              ].map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] tap-target py-1">
-                  <input type="checkbox" checked={form[key] as boolean}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
-                  {label}
-                </label>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
 
-          <div className="flex flex-col-reverse sm:flex-row gap-2 mt-4 sm:justify-end">
-            <button onClick={() => { setShowCreate(false); setEditingModel(null); }}
-              className="px-3 py-2 md:py-1.5 text-xs border border-[var(--color-border)] rounded-[var(--radius-sm)] tap-target">取消</button>
-            <button onClick={handleSave}
-              className="px-3 py-2 md:py-1.5 text-xs text-white bg-[#1A1A1A] hover:bg-[#333333] rounded-[var(--radius-sm)] tap-target">保存</button>
+            {/* Form actions */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 8,
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: `1px solid ${CONSOLE_TOKENS.rowBorder}`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => { setShowCreate(false); setEditingModel(null); }}
+                style={consoleSecondaryButton}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                style={consolePrimaryButton}
+              >
+                保存
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Models List */}
-      {isLoading ? (
-        <TableSkeleton rows={4} cols={5} />
-      ) : error ? (
-        <ErrorState message={error} onRetry={fetchModels} />
-      ) : models.length === 0 ? (
-        <div className="text-sm text-[var(--color-text-subtle)] py-8 text-center">暂无模型配置</div>
-      ) : (
-        <div className="space-y-2">
-          {models.map((model) => {
+      {/* Model List */}
+      <ConsoleSection
+        title={models.length > 0 ? `模型列表（${models.length}）` : undefined}
+      >
+        {isLoading ? (
+          <div style={{ padding: '14px 20px' }}>
+            <TableSkeleton rows={4} cols={4} />
+          </div>
+        ) : error ? (
+          <div style={{ padding: '14px 20px' }}>
+            <ErrorState message={error} onRetry={fetchModels} />
+          </div>
+        ) : models.length === 0 ? (
+          <div
+            style={{
+              padding: '32px 20px',
+              textAlign: 'center',
+              fontSize: 13,
+              color: CONSOLE_TOKENS.textSecondary,
+            }}
+          >
+            暂无模型配置
+          </div>
+        ) : (
+          models.map((model, idx) => {
             const isV = isVideoProvider(model.provider_type);
             const vCaps = getVideoCapabilities(model.capability_metadata as Record<string, unknown> | null);
+            const isLast = idx === models.length - 1;
+
             return (
-              <div key={model.id} className="p-3 border border-[var(--color-border)] rounded-[var(--radius-md)]">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${model.enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-text-subtle)]'}`} />
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium text-[var(--color-text)]">{model.display_name}</span>
-                      <span className="ml-2 text-xs text-[var(--color-text-subtle)] mobile-break-all">{model.code}</span>
+              <ConsoleRow key={model.id} isLast={isLast}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    gap: 12,
+                  }}
+                >
+                  {/* Left: status dot + info */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        background: model.enabled
+                          ? 'oklch(0.6 0.18 155)'
+                          : CONSOLE_TOKENS.textSecondary,
+                      }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: CONSOLE_TOKENS.textPrimary,
+                        }}
+                      >
+                        {model.display_name}
+                      </span>
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 12,
+                          color: CONSOLE_TOKENS.textSecondary,
+                        }}
+                      >
+                        {model.code}
+                      </span>
                     </div>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 ${
-                      isV
-                        ? 'text-purple-400 bg-purple-500/10'
-                        : 'text-[var(--color-text-subtle)] bg-[var(--color-surface-subtle)]'
-                    }`}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                        flexShrink: 0,
+                        background: isV ? 'rgba(168,85,247,0.1)' : CONSOLE_TOKENS.pageBg,
+                        color: isV ? '#A855F7' : CONSOLE_TOKENS.textSecondary,
+                      }}
+                    >
                       {isV ? '视频' : model.provider_type}
                     </span>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0 ml-4 sm:ml-0">
-                    <button onClick={() => handleHealthCheck(model.id)}
-                      className="text-xs text-[var(--color-accent)] hover:underline tap-target">健康检查</button>
-                    <button onClick={() => startEdit(model)}
-                      className="text-xs text-[var(--color-accent)] hover:underline tap-target">编辑</button>
+
+                  {/* Right: actions */}
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleHealthCheck(model.id)}
+                      style={consoleTextActionButton}
+                    >
+                      健康检查
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(model)}
+                      style={consoleTextActionButton}
+                    >
+                      编辑
+                    </button>
                   </div>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--color-text-subtle)]">
+
+                {/* Capability tags */}
+                <div
+                  style={{
+                    marginTop: 6,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '4px 12px',
+                    fontSize: 11,
+                    color: CONSOLE_TOKENS.textSecondary,
+                  }}
+                >
                   {!isV ? (
                     <>
                       {model.supports_text_to_image && <span>文生图</span>}
                       {model.supports_image_to_image && <span>图生图</span>}
                       {model.supports_multiple_references && <span>多参考图</span>}
                       {model.supports_visible_watermark_control && <span>水印控制</span>}
-                      <span>尺寸: {model.supported_sizes?.join(', ')}</span>
+                      {model.supported_sizes && model.supported_sizes.length > 0 && (
+                        <span>尺寸: {model.supported_sizes.join(', ')}</span>
+                      )}
                       <span>最大: {model.max_images_per_request}张</span>
                     </>
                   ) : (
@@ -476,11 +680,11 @@ export default function AdminModelsPage() {
                     </>
                   )}
                 </div>
-              </div>
+              </ConsoleRow>
             );
-          })}
-        </div>
-      )}
-    </div>
+          })
+        )}
+      </ConsoleSection>
+    </ConsolePage>
   );
 }
