@@ -4,6 +4,14 @@ const nextConfig: NextConfig = {
   /* config options here */
   allowedDevOrigins: ['*.dev.coze.site'],
 
+  // Pin Turbopack root to the project directory.
+  // Sandbox/deploy environments may contain stray lockfiles (e.g. /pnpm-lock.yaml)
+  // that cause Turbopack to misdetect the project root, leading to stale or
+  // inconsistent build output. Explicit root makes builds deterministic.
+  turbopack: {
+    root: __dirname,
+  },
+
   // Request body size limit (prevents memory exhaustion from oversized payloads)
   serverExternalPackages: [],
   experimental: {
