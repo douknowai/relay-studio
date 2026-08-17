@@ -468,7 +468,7 @@ export default function ApiKeysPage() {
                   <button
                     onClick={createKey}
                     disabled={!newKeyName.trim() || newKeyScopes.length === 0}
-                    className="flex-1 py-2 text-xs font-medium text-white bg-[var(--color-accent)] rounded-[var(--radius-sm)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 tap-target"
+                    className="flex-1 py-2 text-xs font-medium text-white bg-[#1A1A1A] rounded-[var(--radius-sm)] hover:bg-[#333333] disabled:opacity-50 tap-target"
                   >
                     创建
                   </button>

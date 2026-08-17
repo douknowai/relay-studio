@@ -118,7 +118,7 @@ export default function AdminUserDetailPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 md:space-y-6">
+    <div className="min-h-full bg-[#F5F5F5] p-4 md:p-6 lg:p-8 max-w-4xl mx-auto space-y-4 md:space-y-6">
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push('/admin/users')}
@@ -129,7 +129,7 @@ export default function AdminUserDetailPage() {
             <path d="M11 4L6 9l5 5" />
           </svg>
         </button>
-        <h1 className="text-lg font-medium text-[var(--color-text)]">用户详情</h1>
+        <h1 className="text-[24px] leading-8 font-[650] text-[#1A1A1A]">用户详情</h1>
       </div>
 
       {/* Profile Card */}
@@ -161,7 +161,7 @@ export default function AdminUserDetailPage() {
           <h2 className="text-sm font-medium text-[var(--color-text)]">额度配置</h2>
           <button
             onClick={() => editing ? saveQuota() : setEditing(true)}
-            className="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded-[var(--radius-sm)] hover:bg-[var(--color-surface-hover)] tap-target self-start"
+            className="px-3 py-1.5 text-xs font-medium text-white bg-[#1A1A1A] hover:bg-[#333333] rounded-[var(--radius-sm)] tap-target self-start"
           >
             {editing ? '保存' : '编辑'}
           </button>
