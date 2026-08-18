@@ -32,12 +32,12 @@ INSERT INTO model_configs (code, display_name, provider_type, external_model_id,
 -- Image models (Seedream by Doubao/ByteDance via Coze SDK)
 -- external_model_id must match coze-coding-dev-sdk official model names
 ('image-pro', 'Image Pro', 'coze_coding', 'doubao-seedream-5-0-260128', true, 1, 'image',
-  true, true, false, false, false, false, false,
+  true, true, false, false, false, false, true,
   '["2K","4K","2560x1440","2048x2048","3840x2160","4096x4096"]', 4, 5, 120,
   '{}', '{"description": "高质量图像生成模型（Seedream 5.0）"}'),
 
 ('image-standard', 'Image Standard', 'coze_coding', 'doubao-seedream-4-5-251128', true, 2, 'image',
-  true, false, false, false, false, false, false,
+  true, false, false, false, false, false, true,
   '["2K","4K","1024x1024"]', 4, 10, 90,
   '{}', '{"description": "标准图像生成模型（Seedream 4.5）"}'),
 

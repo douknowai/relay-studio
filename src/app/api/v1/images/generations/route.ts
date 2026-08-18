@@ -190,8 +190,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Check watermark and sequential-generation support
-    if (visible_watermark && !modelConfig.supports_visible_watermark_control) {
-      throw new AppError(ErrorCodes.INVALID_REQUEST, 'This model does not support watermark control');
+    // Only disabling the watermark requires model support (aligned with the async images route)
+    if (!visible_watermark && !modelConfig.supports_visible_watermark_control) {
+      throw new AppError(ErrorCodes.INVALID_REQUEST, 'This model does not support disabling the visible watermark');
     }
     if (n > 1 && !modelConfig.supports_sequential_generation) {
       throw new AppError(ErrorCodes.INVALID_REQUEST, 'This model does not support multiple images per request');

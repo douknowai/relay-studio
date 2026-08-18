@@ -82,6 +82,7 @@ export default function StudioPage() {
   const [videoResolution, setVideoResolution] = useState('720p');
   const [videoRatio, setVideoRatio] = useState('16:9');
   const [generateAudio, setGenerateAudio] = useState(true);
+  const [videoWatermark, setVideoWatermark] = useState(true);
   const [referenceVideoUrl, setReferenceVideoUrl] = useState('');
   const [referenceAudioUrl, setReferenceAudioUrl] = useState('');
   const [referenceVideoFiles, setReferenceVideoFiles] = useState<File[]>([]);
@@ -486,6 +487,7 @@ export default function StudioPage() {
         body.resolution = videoResolution;
         body.ratio = videoRatio;
         body.duration = videoDuration;
+        body.watermark = videoWatermark;
 
         // Auto audio (Seedance 1.5 Pro feature)
         if (generateAudio) {
@@ -1072,6 +1074,25 @@ export default function StudioPage() {
                 <span
                   className={`absolute top-0.5 w-5 h-5 md:w-3.5 md:h-3.5 rounded-full bg-white transition-transform ${
                     generateAudio ? 'left-[18px] md:left-4' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
+
+          {/* Video: Watermark Toggle */}
+          {mediaMode === 'video' && (
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-[var(--color-text-muted)]">画面水印</label>
+              <button
+                onClick={() => setVideoWatermark(!videoWatermark)}
+                className={`w-10 h-6 md:w-8 md:h-4.5 rounded-full transition-colors relative tap-target ${
+                  videoWatermark ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-strong)]'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 md:w-3.5 md:h-3.5 rounded-full bg-white transition-transform ${
+                    videoWatermark ? 'left-[18px] md:left-4' : 'left-0.5'
                   }`}
                 />
               </button>
