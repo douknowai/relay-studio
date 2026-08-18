@@ -69,20 +69,11 @@ BEGIN
   END IF;
 END $$;
 
--- -------------------------------------------------------------
--- 3. Strip gate fields from capability_metadata (JSON keeps Param
---    semantics only). media_type / supports_* now live in columns.
--- -------------------------------------------------------------
-UPDATE model_configs
-SET capability_metadata = capability_metadata - 'media_type'
-                             - 'supports_text_to_video'
-                             - 'supports_image_to_video'
-                             - 'supports_multiple_references'
-WHERE capability_metadata ?| ARRAY[
-  'media_type',
-  'supports_text_to_video',
-  'supports_image_to_video',
-  'supports_multiple_references'
-];
-
 COMMIT;
+
+-- NOTE: The JSON gate-field strip was deliberately moved to a separate
+-- migration (0005_model_metadata_strip.sql). Reason: the currently
+-- deployed frontend filters video models by capability_metadata.media_type;
+-- stripping it here would empty the video model list until the new
+-- frontend ships. Keep 0004 purely structural so each deployment step
+-- is backward compatible.
