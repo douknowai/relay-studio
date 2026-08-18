@@ -82,7 +82,7 @@ export default function StudioPage() {
   const [videoResolution, setVideoResolution] = useState('720p');
   const [videoRatio, setVideoRatio] = useState('16:9');
   const [generateAudio, setGenerateAudio] = useState(true);
-  const [videoWatermark, setVideoWatermark] = useState(true);
+  const [videoWatermark, setVideoWatermark] = useState(false);
   const [referenceVideoUrl, setReferenceVideoUrl] = useState('');
   const [referenceAudioUrl, setReferenceAudioUrl] = useState('');
   const [referenceVideoFiles, setReferenceVideoFiles] = useState<File[]>([]);

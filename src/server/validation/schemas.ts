@@ -75,7 +75,7 @@ export const createVideoTaskSchema = z.object({
   generate_audio: z.boolean().optional().default(true),
   reference_videos: z.array(z.string().url()).max(3).optional(),
   reference_audios: z.array(z.string().url()).max(3).optional(),
-  watermark: z.boolean().optional(),
+  watermark: z.boolean().optional().default(false),
   camerafixed: z.boolean().optional(),
   image_url: z.string().url().optional(),
   image_role: z.enum(['first_frame', 'last_frame']).optional(),
