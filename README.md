@@ -334,7 +334,7 @@ Content-Type: application/json
 | `reference_audios` | string[]（URL） | 参考音频，最多 3 个 |
 | `reference_video_asset_ids` | string[]（UUID） | 参考视频资产 ID，最多 3 个；服务端校验归属并转换为签名 URL，Web 控制台使用 |
 | `reference_audio_asset_ids` | string[]（UUID） | 参考音频资产 ID，最多 3 个；同上 |
-| `watermark` | boolean | 是否添加水印；关闭水印需要模型支持 |
+| `watermark` | boolean | 是否添加画面水印；默认 `false`（无水印），开启需传 `true` |
 | `camerafixed` | boolean | 是否固定镜头 |
 
 参考视频/音频资产需先通过 `POST /api/upload/reference` 上传（视频支持 mp4/webm/mov，音频支持 mp3/wav/aac 等常见格式），上传响应中的 `asset.id` 即为 asset_id。
