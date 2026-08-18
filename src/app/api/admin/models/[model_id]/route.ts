@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { authenticateRequest, successResponse, errorResponse, requireAdmin } from '@/server/api-helpers';
 import { AppError, ErrorCodes } from '@/server/errors';
 import { adminUpdateModelSchema } from '@/server/validation/admin-schemas';
+import { sanitizeMetadataForWrite, deriveCapabilities } from '@/server/models/capabilities';
 
 const UPDATABLE_FIELDS = [
   'display_name',
@@ -12,6 +13,8 @@ const UPDATABLE_FIELDS = [
   'sort_order',
   'supports_text_to_image',
   'supports_image_to_image',
+  'supports_text_to_video',
+  'supports_image_to_video',
   'supports_multiple_references',
   'supports_sequential_generation',
   'supports_visible_watermark_control',
@@ -57,6 +60,34 @@ export async function PATCH(
     for (const field of UPDATABLE_FIELDS) {
       if (data[field] !== undefined) {
         updates[field] = data[field];
+      }
+    }
+
+    // Gate-semantics guard: capability_metadata must not carry routing /
+    // gate fields — those live in entity columns only.
+    if (updates.capability_metadata !== undefined) {
+      updates.capability_metadata = sanitizeMetadataForWrite(
+        updates.capability_metadata as Record<string, unknown>,
+        { strict: true }
+      );
+    }
+
+    // Post-write consistency check: enabled non-mock models must declare an
+    // external model id, and video models must expose at least one gate.
+    const merged = { ...current, ...updates };
+    const nextCaps = deriveCapabilities(merged as Record<string, unknown>);
+    if (merged.enabled === true && merged.provider_type !== 'mock') {
+      if (!nextCaps.externalModelId) {
+        throw new AppError(
+          ErrorCodes.INVALID_REQUEST,
+          'external_model_id 不能为空：启用的非 mock 模型必须配置真实模型号，否则 Provider 将静默路由到错误模型'
+        );
+      }
+      if (nextCaps.mediaType === 'video' && !(nextCaps.supportsTextToVideo || nextCaps.supportsImageToVideo)) {
+        throw new AppError(
+          ErrorCodes.INVALID_REQUEST,
+          '视频模型至少需启用 supports_text_to_video 或 supports_image_to_video 之一，否则生成请求会被能力门拦截'
+        );
       }
     }
 

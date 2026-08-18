@@ -88,6 +88,7 @@ export const modelConfigs = pgTable(
     workflow_id: varchar("workflow_id", { length: 256 }),
     enabled: boolean("enabled").notNull().default(true),
     sort_order: integer("sort_order").notNull().default(0),
+    media_type: varchar("media_type", { length: 16 }).notNull().default("image"),
     supports_text_to_image: boolean("supports_text_to_image").notNull().default(true),
     supports_image_to_image: boolean("supports_image_to_image").notNull().default(false),
     supports_text_to_video: boolean("supports_text_to_video").notNull().default(false),

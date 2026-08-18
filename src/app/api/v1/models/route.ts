@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, successResponse, errorResponse, requireScope } from '@/server/api-helpers';
 import { AppError } from '@/server/errors';
+import { deriveCapabilities } from '@/server/models/capabilities';
+import type { ModelConfigRow } from '@/server/models/capabilities';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,38 +38,38 @@ export async function GET(request: NextRequest) {
     const isApiKeyAuth = authHeader?.startsWith('Bearer irs_live_');
 
     if (isApiKeyAuth) {
-      // Return OpenAI-compatible format
-      const openaiModels = models.map((m: Record<string, unknown>) => {
-        const meta = (m.capability_metadata as Record<string, unknown>) || {};
-        const isVideo = (m.provider_type as string)?.includes('video');
+      // OpenAI-compatible format — derived from the normalized accessor so
+      // gate columns and param metadata can never disagree.
+      const openaiModels = models.map((m: ModelConfigRow) => {
+        const caps = deriveCapabilities(m);
         return {
-          id: m.code,
+          id: caps.code,
           object: 'model' as const,
           created: Math.floor(new Date(m.created_at as string).getTime() / 1000),
           owned_by: 'relay-studio',
           // Extended fields for our platform
-          display_name: m.display_name,
-          provider_type: m.provider_type,
-          type: isVideo ? 'video' : 'image',
+          display_name: caps.displayName,
+          provider_type: caps.providerType,
+          type: caps.mediaType,
           // Image fields
-          supports_text_to_image: m.supports_text_to_image || false,
-          supports_image_to_image: m.supports_image_to_image || false,
-          supported_sizes: m.supported_sizes || [],
-          max_images_per_request: m.max_images_per_request || 0,
-          // Video fields (read from DB columns first, fallback to capability_metadata)
-          supports_text_to_video: m.supports_text_to_video || meta.supports_text_to_video || false,
-          supports_image_to_video: m.supports_image_to_video || meta.supports_image_to_video || false,
-          supports_reference_video: meta.supports_reference_video || false,
-          supports_reference_audio: meta.supports_reference_audio || false,
-          supported_resolutions: meta.supported_resolutions || [],
-          supported_ratios: meta.supported_ratios || [],
-          supported_durations: meta.supported_durations || [],
-          max_videos_per_request: meta.max_videos_per_request || 0,
-          default_resolution: meta.default_resolution || null,
-          default_ratio: meta.default_ratio || null,
-          default_duration: meta.default_duration || null,
+          supports_text_to_image: caps.supportsTextToImage,
+          supports_image_to_image: caps.supportsImageToImage,
+          supported_sizes: caps.supportedSizes,
+          max_images_per_request: caps.maxImagesPerRequest,
+          // Video fields (gate columns — single source of truth)
+          supports_text_to_video: caps.supportsTextToVideo,
+          supports_image_to_video: caps.supportsImageToVideo,
+          supports_reference_video: caps.supportsReferenceVideo,
+          supports_reference_audio: caps.supportsReferenceAudio,
+          supported_resolutions: caps.supportedSizes,
+          supported_ratios: caps.supportedRatios,
+          supported_durations: caps.supportedDurations,
+          max_videos_per_request: caps.maxVideosPerRequest,
+          default_resolution: caps.defaultResolution,
+          default_ratio: caps.defaultRatio,
+          default_duration: caps.defaultDuration,
           // Common
-          description: meta.description || '',
+          description: caps.description,
         };
       });
       return NextResponse.json({
@@ -76,7 +78,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return successResponse(models, auth.requestId);
+    // Session mode: raw rows with a normalized `capabilities` projection
+    // attached. Consumers should prefer `capabilities`; raw columns remain
+    // for backward compatibility during the transition.
+    const modelsWithCapabilities = models.map((m: ModelConfigRow) => ({
+      ...m,
+      capabilities: deriveCapabilities(m),
+    }));
+
+    return successResponse(modelsWithCapabilities, auth.requestId);
   } catch (err) {
     // OpenAI-compatible error for API key auth
     const authHeader = request.headers.get('authorization');

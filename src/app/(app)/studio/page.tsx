@@ -7,7 +7,6 @@ import { useAuth } from '@/lib/auth-context';
 import { fetchWithTimeout } from '@/lib/fetch-utils';
 import { copyToClipboard } from '@/lib/clipboard';
 import { ModelConfig, TaskStatus } from '@/types';
-import type { VideoCapabilityMetadata } from '@/types';
 
 interface CategoryQuota {
   daily_limit: number;
@@ -134,53 +133,31 @@ export default function StudioPage() {
     }
   };
 
-  // Video capabilities derived from selected model.
-  const videoMeta = selectedModel?.capability_metadata as VideoCapabilityMetadata | undefined;
-  // Resolution options MUST read the `supported_sizes` DB column first — the
-  // backend videos route validates against exactly this source (with
-  // capability_metadata.supported_resolutions as fallback). Keeping the same
-  // precedence here prevents offering options the backend will reject.
-  const videoCapResolutions: string[] =
-    (selectedModel?.supported_sizes?.length ? selectedModel.supported_sizes : undefined) ??
-    videoMeta?.supported_resolutions ??
-    ['480p', '720p', '1080p'];
-  const videoCapRatios: string[] = videoMeta?.supported_ratios ?? ['16:9', '9:16', '1:1'];
-  const videoCapDurations: number[] = (() => {
-    if (videoMeta?.supported_durations?.length) return videoMeta.supported_durations;
-    const min = videoMeta?.min_duration;
-    const max = videoMeta?.max_duration;
-    if (typeof min === 'number' && typeof max === 'number' && max >= min) {
-      return Array.from({ length: max - min + 1 }, (_, i) => min + i);
-    }
-    return [5, 10];
-  })();
+  // Normalized capabilities from the server accessor — legacy structure
+  // fallback chains are resolved server-side; read directly, no fallbacks.
+  const caps = selectedModel?.capabilities;
+  const videoCapResolutions: string[] = caps?.supportedSizes?.length ? caps.supportedSizes : ['480p', '720p', '1080p'];
+  const videoCapRatios: string[] = caps?.supportedRatios?.length ? caps.supportedRatios : ['16:9', '9:16', '1:1'];
+  const videoCapDurations: number[] = caps?.supportedDurations?.length ? caps.supportedDurations : [5, 10];
 
   // Models filtered by current media mode
-  const filteredModels = models.filter(m => {
-    const mt = m.capability_metadata?.media_type ?? (m.provider_type?.includes('video') ? 'video' : 'image');
-    return mt === mediaMode;
-  });
+  const filteredModels = models.filter(m => (m.capabilities?.mediaType ?? 'image') === mediaMode);
 
-  // Apply a model's default generation parameters. Resolution options follow
-  // the same precedence as the backend validation: `supported_sizes` column
-  // first, capability_metadata.supported_resolutions as fallback.
+  // Apply a model's default generation parameters from normalized capabilities.
   const applyModelDefaults = useCallback((model: ModelConfig | undefined) => {
-    if (!model) return;
-    if (model.supported_sizes?.[0]) {
-      setSize(model.supported_sizes[0]);
+    if (!model?.capabilities) return;
+    const c = model.capabilities;
+    if (c.supportedSizes[0]) {
+      setSize(c.supportedSizes[0]);
     }
-    const cap = model.capability_metadata as Record<string, unknown> | undefined;
-    const modelResolutions = model.supported_sizes?.length
-      ? model.supported_sizes
-      : (cap?.supported_resolutions as string[] | undefined);
-    if (modelResolutions?.length) {
-      setVideoResolution((cap?.default_resolution as string) || modelResolutions[modelResolutions.length - 1]);
+    if (c.supportedSizes.length > 0) {
+      setVideoResolution(c.defaultResolution || c.supportedSizes[c.supportedSizes.length - 1]);
     }
-    if (Array.isArray(cap?.supported_ratios) && cap.supported_ratios.length > 0) {
-      setVideoRatio((cap.default_ratio as string) || (cap.supported_ratios[0] as string));
+    if (c.supportedRatios.length > 0) {
+      setVideoRatio(c.defaultRatio || c.supportedRatios[0]);
     }
-    if (Array.isArray(cap?.supported_durations) && cap.supported_durations.length > 0) {
-      setVideoDuration((cap.default_duration as number) || (cap.supported_durations[0] as number));
+    if (c.supportedDurations.length > 0) {
+      setVideoDuration(c.defaultDuration || c.supportedDurations[0]);
     }
   }, []);
 
@@ -1083,7 +1060,7 @@ export default function StudioPage() {
           )}
 
           {/* Video: Auto Audio Toggle (Seedance 1.5 Pro) */}
-          {mediaMode === 'video' && videoMeta?.generate_audio_default !== undefined && !videoMeta?.supports_reference_audio && (
+          {mediaMode === 'video' && caps?.generateAudioDefault !== null && !caps?.supportsReferenceAudio && (
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-[var(--color-text-muted)]">自动生成音频</label>
               <button
@@ -1102,7 +1079,7 @@ export default function StudioPage() {
           )}
 
           {/* Video: Reference Video Upload (Seedance 2.0) */}
-          {mediaMode === 'video' && videoMeta?.supports_reference_video && (
+          {mediaMode === 'video' && caps?.supportsReferenceVideo && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-[var(--color-text-muted)]">参考视频</label>
               <div className="flex gap-2 items-center">
@@ -1122,7 +1099,7 @@ export default function StudioPage() {
           )}
 
           {/* Video: Reference Audio Upload (Seedance 2.0) */}
-          {mediaMode === 'video' && videoMeta?.supports_reference_audio && (
+          {mediaMode === 'video' && caps?.supportsReferenceAudio && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-[var(--color-text-muted)]">参考音频</label>
               <div className="flex gap-2 items-center">

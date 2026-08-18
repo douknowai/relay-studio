@@ -11,7 +11,10 @@ import { AppError, ErrorCodes } from '@/server/errors';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 import { createStorageClient } from '@/server/storage';
 import { createTask, executeTask } from '@/server/tasks/executor';
-import type { TaskType } from '@/server/tasks/state-machine';
+import {
+  deriveCapabilities,
+  assertVideoGenerationSupported,
+} from '@/server/models/capabilities';
 import {
   createVideoTaskSchema,
   videoListQuerySchema,
@@ -174,9 +177,10 @@ export async function POST(request: NextRequest) {
       throw new AppError(ErrorCodes.MODEL_NOT_FOUND, '模型不存在或未启用');
     }
 
-    // 3. Verify model is a video model
-    const mediaType = (modelConfig.capability_metadata as Record<string, unknown>)?.media_type;
-    if (mediaType !== 'video') {
+    // 3. Verify model is a video model + 5/6/6.5/7. Capability gates and
+    // resolution/ratio/duration range checks, all via the normalized accessor.
+    const caps = deriveCapabilities(modelConfig);
+    if (caps.mediaType !== 'video') {
       throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不是视频模型');
     }
 
@@ -193,56 +197,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Validate resolution against model supported_sizes or capability_metadata.supported_resolutions
-    const supportedResolutions =
-      (modelConfig.supported_sizes as string[] | null)?.length
-        ? (modelConfig.supported_sizes as string[])
-        : (modelConfig.capability_metadata as Record<string, unknown>)?.supported_resolutions as string[] | undefined;
-    if (supportedResolutions && supportedResolutions.length > 0) {
-      if (!supportedResolutions.includes(resolution)) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, '模型不支持此分辨率');
-      }
-    }
-
-    // 6. Validate ratio against capability_metadata.supported_ratios
-    const supportedRatios = (modelConfig.capability_metadata as Record<string, unknown>)?.supported_ratios as string[] | undefined;
-    if (supportedRatios && supportedRatios.length > 0) {
-      if (!supportedRatios.includes(ratio)) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, '模型不支持此宽高比');
-      }
-    }
-
-    // 6.5 Validate duration against capability_metadata.min_duration/max_duration
-    const capabilityMeta = modelConfig.capability_metadata as Record<string, unknown> | null;
-    const minDuration = typeof capabilityMeta?.min_duration === 'number' ? capabilityMeta.min_duration : null;
-    const maxDuration = typeof capabilityMeta?.max_duration === 'number' ? capabilityMeta.max_duration : null;
-    if (duration >= 0) {
-      if (minDuration !== null && duration < minDuration) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, `时长不能小于 ${minDuration} 秒`);
-      }
-      if (maxDuration !== null && duration > maxDuration) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, `时长不能超过 ${maxDuration} 秒`);
-      }
-    }
-
-    // 7. Determine task type
-    let taskType: TaskType;
-    if (reference_asset_ids && reference_asset_ids.length >= 2) {
-      taskType = 'first_last_frame';
-      if (!modelConfig.supports_multiple_references) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持首尾帧模式');
-      }
-    } else if (reference_asset_ids && reference_asset_ids.length === 1) {
-      taskType = 'image_to_video';
-      if (!modelConfig.supports_image_to_video) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持图生视频');
-      }
-    } else {
-      taskType = 'text_to_video';
-      if (!modelConfig.supports_text_to_video) {
-        throw new AppError(ErrorCodes.INVALID_REQUEST, '此模型不支持文生视频');
-      }
-    }
+    const { taskType } = assertVideoGenerationSupported(caps, {
+      referenceAssetCount: reference_asset_ids?.length ?? 0,
+      resolution,
+      ratio,
+      duration,
+    });
 
     // Determine reference roles for image-to-video / first-last-frame
     let referenceRoles: string[] | undefined;

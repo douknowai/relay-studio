@@ -61,8 +61,45 @@ export interface ModelConfig {
   timeout_seconds: number;
   default_parameters: Record<string, unknown>;
   capability_metadata: ImageCapabilityMetadata | VideoCapabilityMetadata | Record<string, unknown>;
+  /** Normalized capabilities projected server-side (single source of truth read). */
+  capabilities?: ModelCapabilities;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Server-normalized model capabilities (see src/server/models/capabilities.ts).
+ * Legacy structure compatibility (supported_resolutions vs min/max_duration)
+ * is resolved server-side — consumers read these fields directly, no fallbacks.
+ */
+export interface ModelCapabilities {
+  code: string;
+  displayName: string;
+  providerType: string;
+  externalModelId: string;
+  enabled: boolean;
+  mediaType: 'image' | 'video';
+  supportsTextToImage: boolean;
+  supportsImageToImage: boolean;
+  supportsTextToVideo: boolean;
+  supportsImageToVideo: boolean;
+  supportsMultipleReferences: boolean;
+  supportsSequentialGeneration: boolean;
+  supportsVisibleWatermarkControl: boolean;
+  supportedSizes: string[];
+  supportedRatios: string[];
+  supportedDurations: number[];
+  minDuration: number | null;
+  maxDuration: number | null;
+  defaultResolution: string | null;
+  defaultRatio: string | null;
+  defaultDuration: number | null;
+  maxImagesPerRequest: number;
+  maxVideosPerRequest: number;
+  supportsReferenceVideo: boolean;
+  supportsReferenceAudio: boolean;
+  generateAudioDefault: boolean | null;
+  description: string;
 }
 
 export interface ImageCapabilityMetadata {

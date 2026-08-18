@@ -11,6 +11,7 @@
     "start": "bash ./scripts/start.sh",
     "test": "tsx --test tests/**/*.test.ts",
     "ts-check": "tsc -p tsconfig.json",
+    "db:check": "node scripts/check-model-consistency.cjs",
     "validate": "pnpm ts-check && pnpm lint:build && pnpm test"
   },
   "dependencies": {

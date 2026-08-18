@@ -22,7 +22,7 @@ ON CONFLICT (key) DO NOTHING;
 -- Note: external_model_id and workflow_id should be updated
 -- with real values when Coze provider is configured.
 
-INSERT INTO model_configs (code, display_name, provider_type, external_model_id, enabled, sort_order,
+INSERT INTO model_configs (code, display_name, provider_type, external_model_id, enabled, sort_order, media_type,
   supports_text_to_image, supports_image_to_image, supports_text_to_video, supports_image_to_video,
   supports_multiple_references,
   supports_sequential_generation, supports_visible_watermark_control,
@@ -31,32 +31,28 @@ INSERT INTO model_configs (code, display_name, provider_type, external_model_id,
 
 -- Image models (Seedream by Doubao/ByteDance via Coze SDK)
 -- external_model_id must match coze-coding-dev-sdk official model names
-('image-pro', 'Image Pro', 'coze_coding', 'doubao-seedream-5-0-260128', true, 1,
+('image-pro', 'Image Pro', 'coze_coding', 'doubao-seedream-5-0-260128', true, 1, 'image',
   true, true, false, false, false, false, false,
   '["2K","4K","2560x1440","2048x2048","3840x2160","4096x4096"]', 4, 5, 120,
-  '{}', '{"description": "高质量图像生成模型（Seedream 5.0）", "media_type": "image"}'),
+  '{}', '{"description": "高质量图像生成模型（Seedream 5.0）"}'),
 
-('image-standard', 'Image Standard', 'coze_coding', 'doubao-seedream-4-5-251128', true, 2,
+('image-standard', 'Image Standard', 'coze_coding', 'doubao-seedream-4-5-251128', true, 2, 'image',
   true, false, false, false, false, false, false,
   '["2K","4K","1024x1024"]', 4, 10, 90,
-  '{}', '{"description": "标准图像生成模型（Seedream 4.5）", "media_type": "image"}'),
+  '{}', '{"description": "标准图像生成模型（Seedream 4.5）"}'),
 
-('image-mock', 'Mock Provider', 'mock', 'mock-model', false, 99,
+('image-mock', 'Mock Provider', 'mock', 'mock-model', false, 99, 'image',
   true, true, false, false, true, true, true,
   '["512x512","1024x1024","1024x1792","1792x1024"]', 4, 100, 30,
   '{}', '{"description": "本地开发和测试用 Mock 模型"}'),
 
 -- Video models (Seedance by Doubao/ByteDance via Coze SDK)
 -- external_model_id must match coze-coding-dev-sdk official model names
-('video-seedance-1.5-pro', 'Seedance 1.5 Pro', 'coze_coding_video', 'doubao-seedance-1-5-pro-251215', true, 10,
+('video-seedance-1.5-pro', 'Seedance 1.5 Pro', 'coze_coding_video', 'doubao-seedance-1-5-pro-251215', true, 10, 'video',
   false, false, true, true, false, false, false,
   '[]', 1, 5, 600,
   '{}', '{
     "description": "高质量视频生成模型，支持文生视频、图生视频（首帧/尾帧）和自动音频生成",
-    "media_type": "video",
-    "supports_text_to_video": true,
-    "supports_image_to_video": true,
-    "supports_multiple_references": false,
     "supports_reference_video": false,
     "supports_reference_audio": false,
     "supports_adaptive_ratio": true,
@@ -70,15 +66,11 @@ INSERT INTO model_configs (code, display_name, provider_type, external_model_id,
     "generate_audio_default": true
   }'),
 
-('video-seedance-2.0', 'Seedance 2.0', 'coze_coding_video', 'doubao-seedance-2-0-260128', true, 11,
+('video-seedance-2.0', 'Seedance 2.0', 'coze_coding_video', 'doubao-seedance-2-0-260128', true, 11, 'video',
   false, false, true, true, true, false, false,
   '[]', 1, 3, 600,
   '{}', '{
     "description": "新一代视频生成模型，支持参考图片/视频/音频输入，多模态创作",
-    "media_type": "video",
-    "supports_text_to_video": true,
-    "supports_image_to_video": true,
-    "supports_multiple_references": true,
     "supports_reference_video": true,
     "supports_reference_audio": true,
     "supports_adaptive_ratio": false,
